@@ -18,13 +18,16 @@ export const adminNav: NavItem[] = [
 
 export const pengajarNav: NavItem[] = [
   { label: "Dashboard", href: "/pengajar", iconName: "LayoutDashboard" },
-  { label: "Absensi", href: "/pengajar/absensi", iconName: "ClipboardCheck" },
-  { label: "Progres", href: "/pengajar/progres", iconName: "BarChart3" },
   { label: "Jadwal", href: "/pengajar/jadwal", iconName: "Calendar" },
+  { label: "Perkembangan", href: "/pengajar/perkembangan", iconName: "TrendingUp" },
+  { label: "Rekap Perkembangan", href: "/pengajar/rekap-perkembangan", iconName: "ListChecks" },
+  { label: "Presensi", href: "/pengajar/presensi", iconName: "ClipboardCheck" },
+  { label: "Laporan", href: "/pengajar/laporan", iconName: "FileText" },
 ];
 
 export const orangTuaNav: NavItem[] = [
   { label: "Dashboard", href: "/orang-tua", iconName: "LayoutDashboard" },
   { label: "Anak", href: "/orang-tua/anak", iconName: "Baby" },
   { label: "Progres", href: "/orang-tua/progres", iconName: "BarChart3" },
+  { label: "Laporan", href: "/orang-tua/laporan", iconName: "FileText" },
 ];

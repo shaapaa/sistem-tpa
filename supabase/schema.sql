@@ -71,6 +71,11 @@ create table santris (
   nama_ayah text,
   nama_ibu text,
   no_hp_wali text,
+  pekerjaan_ayah text,
+  pekerjaan_ibu text,
+  iuran numeric(10,2) default 0,
+  keterangan text check (keterangan in ('IQRA', 'QURAN')),
+  pendidikan_saat_ini text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -202,6 +207,40 @@ create table evaluasis (
 );
 
 -- ============================================
+-- PERKEMBANGAN SANTRIS (Unified Development Tracking)
+-- ============================================
+
+create table perkembangan_santris (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid references santris(id) on delete restrict,
+  teacher_id uuid references pengajars(id) on delete restrict,
+  meeting_id uuid references pertemuans(id) on delete restrict,
+  tanggal date not null default current_date,
+  tipe_perkembangan text not null check (tipe_perkembangan in ('BACAAN', 'HAFALAN', 'PRAKTIK_SHOLAT')),
+  
+  -- For BACAAN type
+  jenis_bacaan text check (jenis_bacaan in ('IQRA', 'QURAN')),
+  iqra_ke int,
+  halaman_iqra int,
+  juz int,
+  surah text,
+  
+  -- For HAFALAN type
+  nama_surah text,
+  nama_doa text,
+  
+  -- For PRAKTIK_SHOLAT type
+  jenis_sholat text,
+  
+  -- Common fields
+  penilaian text check (penilaian in ('BAIK', 'CUKUP_BAIK', 'KURANG')),
+  catatan text,
+  
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- ============================================
 -- INDEXES
 -- ============================================
 
@@ -218,6 +257,10 @@ create index idx_absensis_teacher on absensis(teacher_id);
 create index idx_progres_bacaans_student on progres_bacaans(student_id);
 create index idx_hafalans_student on hafalans(student_id);
 create index idx_hafalans_nama_surah on hafalans(nama_surah);
+create index idx_perkembangan_student on perkembangan_santris(student_id);
+create index idx_perkembangan_teacher on perkembangan_santris(teacher_id);
+create index idx_perkembangan_tanggal on perkembangan_santris(tanggal);
+create index idx_perkembangan_tipe on perkembangan_santris(tipe_perkembangan);
 
 -- ============================================
 -- ROW LEVEL SECURITY
@@ -262,6 +305,7 @@ alter table doa_harians enable row level security;
 alter table praktik_sholats enable row level security;
 alter table evaluasis enable row level security;
 alter table orang_tuas enable row level security;
+alter table perkembangan_santris enable row level security;
 
 -- ADMIN: full access
 create policy "Admin users" on users for all using (public.user_role() = 'ADMIN');
@@ -278,6 +322,11 @@ create policy "Admin doa" on doa_harians for all using (public.user_role() = 'AD
 create policy "Admin sholat" on praktik_sholats for all using (public.user_role() = 'ADMIN');
 create policy "Admin evaluasi" on evaluasis for all using (public.user_role() = 'ADMIN');
 create policy "Admin orang_tuas" on orang_tuas for all using (public.user_role() = 'ADMIN');
+
+-- PERKEMBANGAN SANTRIS policies
+create policy "Admin perkembangan" on perkembangan_santris for all using (public.user_role() = 'ADMIN');
+create policy "Pengajar write perkembangan" on perkembangan_santris for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
+create policy "Orang Tua read perkembangan" on perkembangan_santris for select using (public.user_role() = 'ORANG_TUA' and student_id = public.anak_id());
 
 -- PENGAJAR: read/write their assigned groups
 create policy "Pengajar read users" on users for select using (public.user_role() = 'PENGAJAR');
