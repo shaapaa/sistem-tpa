@@ -17,7 +17,7 @@ interface Pengajar {
   nama: string
   jenis_kelamin: string | null
   no_hp: string | null
-  users?: { username: string; role: string }
+  users?: { id: string; username: string; role: string }
 }
 
 export default function PengajarPage() {
@@ -38,7 +38,7 @@ export default function PengajarPage() {
   const fetchData = async () => {
     const { data } = await supabase
       .from("pengajars")
-      .select("*, users(username, role)")
+      .select("*, users(id, username, role)")
       .order("nama")
     setPengajars(data ?? [])
     setLoading(false)
@@ -65,8 +65,12 @@ export default function PengajarPage() {
   }
 
   const handleSave = async () => {
-    if (!form.username || !form.password) {
-      alert("Username dan password wajib diisi")
+    if (!form.username) {
+      alert("Username wajib diisi")
+      return
+    }
+    if (!editing && !form.password) {
+      alert("Password wajib diisi")
       return
     }
 
@@ -77,16 +81,33 @@ export default function PengajarPage() {
     }
 
     if (editing) {
-      await supabase.from("pengajars").update(payload).eq("id", editing.id)
-      await supabase.from("users").update({ username: form.username }).eq("id", editing.users?.username ? editing.id : "")
+      const { error: pengajarErr } = await supabase.from("pengajars").update(payload).eq("id", editing.id)
+      if (pengajarErr) { alert(pengajarErr.message); return }
+
+      if (editing.users?.id) {
+        await supabase.from("users").update({ username: form.username }).eq("id", editing.users.id)
+        if (form.password) {
+          await supabase.auth.admin.updateUserById(editing.users.id, { password: form.password })
+        }
+      }
     } else {
-      const { data: newPengajar } = await supabase.from("pengajars").insert(payload).select().single()
+      const { data: newPengajar, error: pengajarErr } = await supabase.from("pengajars").insert(payload).select().single()
+      if (pengajarErr) { alert(pengajarErr.message); return }
       if (newPengajar) {
-        await supabase.from("users").insert({
-          id: newPengajar.id,
-          username: form.username,
-          role: "PENGAJAR",
+        const { data: authUser, error: authErr } = await supabase.auth.admin.createUser({
+          email: `${form.username}@tpa-baitulyatama.local`,
+          password: form.password,
+          email_confirm: true,
         })
+        if (authErr) { alert(authErr.message); return }
+        if (authUser.user) {
+          await supabase.from("users").insert({
+            id: authUser.user.id,
+            username: form.username,
+            role: "PENGAJAR",
+          })
+          await supabase.from("pengajars").update({ user_id: authUser.user.id }).eq("id", newPengajar.id)
+        }
       }
     }
 
@@ -94,9 +115,17 @@ export default function PengajarPage() {
     fetchData()
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Hapus pengajar ini?")) return
-    await supabase.from("pengajars").delete().eq("id", id)
+  const handleDelete = async (p: Pengajar) => {
+    if (!confirm(`Hapus pengajar ${p.nama}?`)) return
+
+    // remove login + linked users row first (user_id FK is RESTRICT, pengajar must still exist)
+    if (p.users?.id) {
+      await supabase.auth.admin.deleteUser(p.users.id)
+      await supabase.from("users").delete().eq("id", p.users.id)
+    }
+
+    // cascade deletes group_pengajars, absensis, pertemuans, perkembangan, etc.
+    await supabase.from("pengajars").delete().eq("id", p.id)
     fetchData()
   }
 
@@ -159,7 +188,7 @@ export default function PengajarPage() {
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(p); }}
                       className="opacity-0 group-hover:opacity-100 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
                     >
                       <Trash2 className="h-4 w-4" />

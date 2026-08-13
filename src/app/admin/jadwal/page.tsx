@@ -26,6 +26,11 @@ interface Group {
   nama_group: string;
 }
 
+interface Pengajar {
+  id: string;
+  nama: string;
+}
+
 const HARI_ORDER = ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU", "MINGGU"];
 const HARI_LABEL: Record<string, string> = {
   SENIN: "Senin", SELASA: "Selasa", RABU: "Rabu",
@@ -35,19 +40,22 @@ const HARI_LABEL: Record<string, string> = {
 export default function JadwalPage() {
   const [jadwals, setJadwals] = useState<Jadwal[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [pengajars, setPengajars] = useState<Pengajar[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Jadwal | null>(null);
-  const [form, setForm] = useState({ group_id: "", hari: "", jam_mulai: "", jam_selesai: "" });
+  const [form, setForm] = useState({ group_id: "", pengajar_id: "", hari: "", jam_mulai: "", jam_selesai: "" });
   const supabase = createClient();
 
   const fetchData = async () => {
-    const [jadwalRes, groupRes] = await Promise.all([
+    const [jadwalRes, groupRes, pengajarRes] = await Promise.all([
       supabase.from("jadwals").select("*, groups(nama_group)").order("jam_mulai"),
       supabase.from("groups").select("id, nama_group").order("nama_group"),
+      supabase.from("pengajars").select("id, nama").order("nama"),
     ]);
     setJadwals(jadwalRes.data ?? []);
     setGroups(groupRes.data ?? []);
+    setPengajars(pengajarRes.data ?? []);
     setLoading(false);
   };
 
@@ -55,23 +63,36 @@ export default function JadwalPage() {
 
   const openAdd = (hari?: string) => {
     setEditing(null);
-    setForm({ group_id: "", hari: hari ?? "", jam_mulai: "", jam_selesai: "" });
+    setForm({ group_id: "", pengajar_id: "", hari: hari ?? "", jam_mulai: "", jam_selesai: "" });
     setDialogOpen(true);
   };
 
   const openEdit = (j: Jadwal) => {
     setEditing(j);
-    setForm({ group_id: j.group_id, hari: j.hari, jam_mulai: j.jam_mulai, jam_selesai: j.jam_selesai });
+    setForm({ group_id: j.group_id, pengajar_id: "", hari: j.hari, jam_mulai: j.jam_mulai, jam_selesai: j.jam_selesai });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
+    if (!form.group_id || !form.hari) {
+      alert("Kelas dan hari wajib diisi")
+      return
+    }
     const payload = { group_id: form.group_id, hari: form.hari, jam_mulai: form.jam_mulai, jam_selesai: form.jam_selesai };
     if (editing) {
       await supabase.from("jadwals").update(payload).eq("id", editing.id);
     } else {
       await supabase.from("jadwals").insert(payload);
     }
+
+    // assign teacher to the class (group_pengajars)
+    if (form.pengajar_id) {
+      await supabase.from("group_pengajars").upsert(
+        { group_id: form.group_id, pengajar_id: form.pengajar_id },
+        { onConflict: "group_id,pengajar_id" }
+      );
+    }
+
     setDialogOpen(false);
     fetchData();
   };
@@ -171,6 +192,15 @@ export default function JadwalPage() {
                 <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>
                 <SelectContent>
                   {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.nama_group}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Pengajar</Label>
+              <Select value={form.pengajar_id} onValueChange={(v: string | null) => v && setForm({ ...form, pengajar_id: v })} items={pengajars.map((p) => ({ label: p.nama, value: p.id }))}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Pilih pengajar" /></SelectTrigger>
+                <SelectContent>
+                  {pengajars.map((p) => <SelectItem key={p.id} value={p.id}>{p.nama}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

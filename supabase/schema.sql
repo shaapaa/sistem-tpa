@@ -50,8 +50,8 @@ create table groups (
 
 create table group_pengajars (
   id uuid primary key default gen_random_uuid(),
-  group_id uuid references groups(id) on delete restrict,
-  pengajar_id uuid references pengajars(id) on delete restrict,
+  group_id uuid references groups(id) on delete cascade,
+  pengajar_id uuid references pengajars(id) on delete cascade,
   created_at timestamptz default now(),
   unique(group_id, pengajar_id)
 );
@@ -63,7 +63,7 @@ create table group_pengajars (
 create table santris (
   id uuid primary key default gen_random_uuid(),
   user_id uuid unique references users(id) on delete restrict,
-  group_id uuid references groups(id) on delete restrict,
+  group_id uuid references groups(id) on delete cascade,
   nama text not null,
   jenis_kelamin text,
   tanggal_lahir date,
@@ -87,7 +87,7 @@ create table santris (
 create table orang_tuas (
   id uuid primary key default gen_random_uuid(),
   user_id uuid unique references users(id) on delete restrict,
-  santri_id uuid unique references santris(id) on delete restrict,
+  santri_id uuid unique references santris(id) on delete cascade,
   created_at timestamptz default now()
 );
 
@@ -97,7 +97,7 @@ create table orang_tuas (
 
 create table jadwals (
   id uuid primary key default gen_random_uuid(),
-  group_id uuid references groups(id) on delete restrict,
+  group_id uuid references groups(id) on delete cascade,
   hari text not null check (hari in ('SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU','MINGGU')),
   jam_mulai time not null,
   jam_selesai time not null,
@@ -112,13 +112,13 @@ create table jadwals (
 
 create table pertemuans (
   id uuid primary key default gen_random_uuid(),
-  jadwal_id uuid references jadwals(id) on delete restrict,
-  group_id uuid references groups(id) on delete restrict,
+  jadwal_id uuid references jadwals(id) on delete cascade,
+  group_id uuid references groups(id) on delete cascade,
   tanggal date not null,
   tema text,
   catatan text,
   status text default 'DRAFT' check (status in ('DRAFT', 'SELESAI', 'DIBATALKAN')),
-  created_by uuid references pengajars(id) on delete restrict,
+  created_by uuid references pengajars(id) on delete cascade,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -129,9 +129,9 @@ create table pertemuans (
 
 create table absensis (
   id uuid primary key default gen_random_uuid(),
-  meeting_id uuid references pertemuans(id) on delete restrict,
-  student_id uuid references santris(id) on delete restrict,
-  teacher_id uuid references pengajars(id) on delete restrict,
+  meeting_id uuid references pertemuans(id) on delete cascade,
+  student_id uuid references santris(id) on delete cascade,
+  teacher_id uuid references pengajars(id) on delete cascade,
   status text not null check (status in ('HADIR', 'IZIN', 'SAKIT', 'ALPHA')),
   keterangan text,
   created_at timestamptz default now(),
@@ -141,9 +141,9 @@ create table absensis (
 
 create table progres_bacaans (
   id uuid primary key default gen_random_uuid(),
-  meeting_id uuid references pertemuans(id) on delete restrict,
-  student_id uuid references santris(id) on delete restrict,
-  teacher_id uuid references pengajars(id) on delete restrict,
+  meeting_id uuid references pertemuans(id) on delete cascade,
+  student_id uuid references santris(id) on delete cascade,
+  teacher_id uuid references pengajars(id) on delete cascade,
   tipe_bacaan text not null check (tipe_bacaan in ('IQRA', 'QURAN')),
   iqra_ke int,
   halaman_iqra int,
@@ -159,9 +159,9 @@ create table progres_bacaans (
 
 create table hafalans (
   id uuid primary key default gen_random_uuid(),
-  meeting_id uuid references pertemuans(id) on delete restrict,
-  student_id uuid references santris(id) on delete restrict,
-  teacher_id uuid references pengajars(id) on delete restrict,
+  meeting_id uuid references pertemuans(id) on delete cascade,
+  student_id uuid references santris(id) on delete cascade,
+  teacher_id uuid references pengajars(id) on delete cascade,
   nama_surah text not null,
   status text not null check (status in ('LANCAR', 'KURANG_LANCAR', 'TIDAK_LANCAR')),
   nilai int not null check (nilai between 0 and 100),
@@ -171,9 +171,9 @@ create table hafalans (
 
 create table doa_harians (
   id uuid primary key default gen_random_uuid(),
-  meeting_id uuid references pertemuans(id) on delete restrict,
-  student_id uuid references santris(id) on delete restrict,
-  teacher_id uuid references pengajars(id) on delete restrict,
+  meeting_id uuid references pertemuans(id) on delete cascade,
+  student_id uuid references santris(id) on delete cascade,
+  teacher_id uuid references pengajars(id) on delete cascade,
   nama_doa text not null,
   status text not null check (status in ('LANCAR', 'KURANG_LANCAR', 'TIDAK_LANCAR')),
   nilai int not null check (nilai between 0 and 100),
@@ -183,9 +183,9 @@ create table doa_harians (
 
 create table praktik_sholats (
   id uuid primary key default gen_random_uuid(),
-  meeting_id uuid references pertemuans(id) on delete restrict,
-  student_id uuid references santris(id) on delete restrict,
-  teacher_id uuid references pengajars(id) on delete restrict,
+  meeting_id uuid references pertemuans(id) on delete cascade,
+  student_id uuid references santris(id) on delete cascade,
+  teacher_id uuid references pengajars(id) on delete cascade,
   gerakan int check (gerakan between 0 and 100),
   bacaan int check (bacaan between 0 and 100),
   tertib int check (tertib between 0 and 100),
@@ -197,9 +197,9 @@ create table praktik_sholats (
 
 create table evaluasis (
   id uuid primary key default gen_random_uuid(),
-  meeting_id uuid references pertemuans(id) on delete restrict,
-  student_id uuid references santris(id) on delete restrict,
-  teacher_id uuid references pengajars(id) on delete restrict,
+  meeting_id uuid references pertemuans(id) on delete cascade,
+  student_id uuid references santris(id) on delete cascade,
+  teacher_id uuid references pengajars(id) on delete cascade,
   catatan text not null,
   rekomendasi text,
   created_at timestamptz default now(),
@@ -212,9 +212,9 @@ create table evaluasis (
 
 create table perkembangan_santris (
   id uuid primary key default gen_random_uuid(),
-  student_id uuid references santris(id) on delete restrict,
-  teacher_id uuid references pengajars(id) on delete restrict,
-  meeting_id uuid references pertemuans(id) on delete restrict,
+  student_id uuid references santris(id) on delete cascade,
+  teacher_id uuid references pengajars(id) on delete cascade,
+  meeting_id uuid references pertemuans(id) on delete cascade,
   tanggal date not null default current_date,
   tipe_perkembangan text not null check (tipe_perkembangan in ('BACAAN', 'HAFALAN', 'PRAKTIK_SHOLAT')),
   
