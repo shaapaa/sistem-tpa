@@ -14,7 +14,7 @@ import { Save, BookOpen, BookMarked, Moon, ArrowLeft, CheckCircle } from "lucide
 import Link from "next/link";
 
 interface Santri { id: string; nama: string; group_id: string; }
-interface Group { id: string; nama_group: string; }
+interface Group { id: string; nama_group: string; sesi: string | null; }
 
 const IQRA_OPTIONS = [1, 2, 3, 4, 5, 6];
 const JUZ_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1);
@@ -53,9 +53,10 @@ const PENILAIAN_OPTIONS = [
 export default function PerkembanganPage() {
   const { user } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState("");
+  const [selectedSesi, setSelectedSesi] = useState("");
   const [santris, setSantris] = useState<Santri[]>([]);
   const [selectedSantri, setSelectedSantri] = useState("");
+  const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const supabase = createClient();
@@ -78,7 +79,7 @@ export default function PerkembanganPage() {
       if (!user) return;
       const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
       if (!pengajar) return;
-      const { data: gp } = await supabase.from("group_pengajars").select("group_id, groups(id, nama_group)").eq("pengajar_id", pengajar.id);
+      const { data: gp } = await supabase.from("group_pengajars").select("group_id, groups(id, nama_group, sesi)").eq("pengajar_id", pengajar.id);
       setGroups(gp?.map((g: any) => g.groups).filter(Boolean) ?? []);
     };
     fetchGroups();
@@ -86,13 +87,20 @@ export default function PerkembanganPage() {
 
   useEffect(() => {
     const fetchSantris = async () => {
-      if (!selectedGroup) { setSantris([]); return; }
-      const { data } = await supabase.from("santris").select("id, nama, group_id").eq("group_id", selectedGroup).order("nama");
+      if (!selectedSesi) { setSantris([]); return; }
+      const groupIds = groups.filter((g) => g.sesi === selectedSesi).map((g) => g.id);
+      if (groupIds.length === 0) { setSantris([]); return; }
+      const { data } = await supabase.from("santris").select("id, nama, group_id").in("group_id", groupIds).order("nama");
       setSantris(data ?? []);
       setSelectedSantri("");
+      setSearch("");
     };
     fetchSantris();
-  }, [selectedGroup]);
+  }, [selectedSesi, groups]);
+
+  const filteredSantris = santris.filter((s) =>
+    s.nama.toLowerCase().includes(search.toLowerCase())
+  );
 
   const handleSaveBacaan = async () => {
     if (!selectedSantri || !user) return;
@@ -249,24 +257,46 @@ export default function PerkembanganPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Pilih Kelas</Label>
-          <Select value={selectedGroup} onValueChange={(v: string | null) => setSelectedGroup(v ?? "")} items={groups.map((g) => ({ label: g.nama_group, value: g.id }))}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>
+          <Label>Pilih Kelas (Sesi)</Label>
+          <Select value={selectedSesi} onValueChange={(v: string | null) => setSelectedSesi(v ?? "")} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelas pagi/sore" /></SelectTrigger>
             <SelectContent>
-              {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.nama_group}</SelectItem>)}
+              <SelectItem value="PAGI">Pagi</SelectItem>
+              <SelectItem value="SORE">Sore</SelectItem>
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">Semua santri pada kelas {selectedSesi === "PAGI" ? "pagi" : selectedSesi === "SORE" ? "sore" : "terpilih"} akan muncul</p>
         </div>
         <div className="space-y-2">
-          <Label>Pilih Santri</Label>
-          <Select value={selectedSantri} onValueChange={(v: string | null) => setSelectedSantri(v ?? "")} disabled={!selectedGroup} items={santris.map((s) => ({ label: s.nama, value: s.id }))}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Pilih santri" /></SelectTrigger>
-            <SelectContent>
-              {santris.map((s) => <SelectItem key={s.id} value={s.id}>{s.nama}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Label>Santri ({santris.length})</Label>
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-3" placeholder="Cari nama santri..." disabled={!selectedSesi} />
         </div>
       </div>
+
+      {selectedSesi && !selectedSantri && (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="max-h-72 overflow-y-auto">
+            {filteredSantris.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                Tidak ada santri pada kelas ini
+              </div>
+            ) : (
+              filteredSantris.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setSelectedSantri(s.id)}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-muted/50 transition-colors border-b border-border/40 last:border-0"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary text-xs font-semibold">
+                    {s.nama.charAt(0)}
+                  </span>
+                  <span className="font-medium text-foreground">{s.nama}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {selectedSantri ? (
         <Tabs defaultValue="bacaan" className="w-full">
@@ -426,7 +456,7 @@ export default function PerkembanganPage() {
             </Card>
           </TabsContent>
         </Tabs>
-      ) : selectedGroup ? (
+      ) : selectedSesi ? (
         <div className="rounded-xl border border-dashed border-border p-12 text-center">
           <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
           <p className="text-sm text-muted-foreground">Pilih santri untuk mulai input perkembangan</p>
