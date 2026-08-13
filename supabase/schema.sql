@@ -336,6 +336,7 @@ create policy "Pengajar read groups" on groups for select using (public.user_rol
 create policy "Pengajar read group_pengajars" on group_pengajars for select using (public.user_role() = 'PENGAJAR');
 create policy "Pengajar read jadwals" on jadwals for select using (public.user_role() = 'PENGAJAR');
 create policy "Pengajar read pertemuans" on pertemuans for select using (public.user_role() = 'PENGAJAR');
+create policy "Pengajar write pertemuans" on pertemuans for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group(group_id)) with check (public.user_role() = 'PENGAJAR' and public.pengajar_in_group(group_id));
 create policy "Pengajar write absensis" on absensis for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
 create policy "Pengajar write progres" on progres_bacaans for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
 create policy "Pengajar write hafalans" on hafalans for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));

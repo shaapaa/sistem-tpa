@@ -122,53 +122,59 @@ export default function PerkembanganPage() {
 
     await supabase.from("perkembangan_santris").insert(payload);
 
-    // Auto-create attendance
-    const santri = santris.find(s => s.id === selectedSantri);
-    if (santri) {
-      const { data: existingAbsen } = await supabase
-        .from("absensis")
-        .select("id")
-        .eq("student_id", selectedSantri)
-        .eq("teacher_id", pengajar.id)
-        .eq("created_at", new Date().toISOString().split("T")[0])
-        .single();
-
-      if (!existingAbsen) {
-        // Find or create pertemuan for today
+    // Auto-create attendance (best-effort, never blocks save confirmation)
+    try {
+      const santri = santris.find(s => s.id === selectedSantri);
+      if (santri) {
         const today = new Date().toISOString().split("T")[0];
-        const { data: jadwal } = await supabase
-          .from("jadwals")
+
+        const { data: existingAbsen } = await supabase
+          .from("absensis")
           .select("id")
-          .eq("group_id", santri.group_id)
-          .single();
+          .eq("student_id", selectedSantri)
+          .eq("teacher_id", pengajar.id)
+          .gte("created_at", `${today}T00:00:00`)
+          .lte("created_at", `${today}T23:59:59`)
+          .maybeSingle();
 
-        if (jadwal) {
-          let { data: pertemuan } = await supabase
-            .from("pertemuans")
+        if (!existingAbsen) {
+          const { data: jadwal } = await supabase
+            .from("jadwals")
             .select("id")
-            .eq("jadwal_id", jadwal.id)
-            .eq("tanggal", today)
-            .single();
+            .eq("group_id", santri.group_id)
+            .limit(1)
+            .maybeSingle();
 
-          if (!pertemuan) {
-            const { data: newPertemuan } = await supabase
+          if (jadwal) {
+            let { data: pertemuan } = await supabase
               .from("pertemuans")
-              .insert({ jadwal_id: jadwal.id, group_id: santri.group_id, tanggal: today, status: "SELESAI", created_by: pengajar.id })
               .select("id")
-              .single();
-            pertemuan = newPertemuan;
-          }
+              .eq("jadwal_id", jadwal.id)
+              .eq("tanggal", today)
+              .maybeSingle();
 
-          if (pertemuan) {
-            await supabase.from("absensis").upsert({
-              meeting_id: pertemuan.id,
-              student_id: selectedSantri,
-              teacher_id: pengajar.id,
-              status: "HADIR",
-            }, { onConflict: "meeting_id,student_id" });
+            if (!pertemuan) {
+              const { data: newPertemuan } = await supabase
+                .from("pertemuans")
+                .insert({ jadwal_id: jadwal.id, group_id: santri.group_id, tanggal: today, status: "SELESAI", created_by: pengajar.id })
+                .select("id")
+                .single();
+              pertemuan = newPertemuan;
+            }
+
+            if (pertemuan) {
+              await supabase.from("absensis").upsert({
+                meeting_id: pertemuan.id,
+                student_id: selectedSantri,
+                teacher_id: pengajar.id,
+                status: "HADIR",
+              }, { onConflict: "meeting_id,student_id" });
+            }
           }
         }
       }
+    } catch {
+      // attendance failure must not hide the saved indicator
     }
 
     setSaving(false);
