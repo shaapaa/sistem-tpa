@@ -13,7 +13,6 @@ interface Jadwal {
   hari: string;
   jam_mulai: string;
   jam_selesai: string;
-  groups?: { nama_group: string };
 }
 
 export default function PengajarJadwalPage() {
@@ -26,16 +25,21 @@ export default function PengajarJadwalPage() {
     const fetchData = async () => {
       if (!user) return;
       const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
-      if (!pengajar) return;
-      const { data: gp } = await supabase.from("group_pengajars").select("group_id").eq("pengajar_id", pengajar.id);
-      const groupIds = gp?.map((g) => g.group_id) ?? [];
-      if (groupIds.length === 0) { setLoading(false); return; }
-      const { data } = await supabase.from("jadwals").select("*, groups(nama_group)").in("group_id", groupIds).order("hari");
+      if (!pengajar) { setLoading(false); return; }
+      const { data } = await supabase
+        .from("jadwals")
+        .select("id, hari, jam_mulai, jam_selesai")
+        .eq("pengajar_id", pengajar.id)
+        .order("hari")
+        .order("jam_mulai");
       setJadwals(data ?? []);
       setLoading(false);
     };
     fetchData();
   }, [user]);
+
+  const HARI_ORDER = ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT"];
+  const sorted = [...jadwals].sort((a, b) => HARI_ORDER.indexOf(a.hari) - HARI_ORDER.indexOf(b.hari));
 
   return (
     <div className="space-y-6">
@@ -48,7 +52,7 @@ export default function PengajarJadwalPage() {
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />)}
         </div>
-      ) : jadwals.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-12 text-center">
           <Calendar className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
           <p className="text-sm text-muted-foreground">Belum ada jadwal</p>
@@ -59,26 +63,29 @@ export default function PengajarJadwalPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kelas</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Hari</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Sesi</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Jam</th>
                 </tr>
               </thead>
               <tbody>
-                {jadwals.map((j) => (
-                  <tr key={j.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors duration-150">
-                    <td className="px-4 py-3 font-medium text-foreground">{j.groups?.nama_group ?? "-"}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className="text-xs">{formatHari(j.hari)}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground font-tabular">
-                      <span className="inline-flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5" />
-                        {formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {sorted.map((j) => {
+                  const sesi = j.jam_mulai.slice(0, 5) === "07:30" ? "Pagi" : "Sore";
+                  return (
+                    <tr key={j.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors duration-150">
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className="text-xs">{formatHari(j.hari)}</Badge>
+                      </td>
+                      <td className="px-4 py-3 font-medium text-foreground">{sesi}</td>
+                      <td className="px-4 py-3 text-muted-foreground font-tabular">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />
+                          {formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

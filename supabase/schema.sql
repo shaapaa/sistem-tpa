@@ -98,6 +98,7 @@ create table orang_tuas (
 create table jadwals (
   id uuid primary key default gen_random_uuid(),
   group_id uuid references groups(id) on delete cascade,
+  pengajar_id uuid references pengajars(id) on delete cascade,
   hari text not null check (hari in ('SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU','MINGGU')),
   jam_mulai time not null,
   jam_selesai time not null,
@@ -334,7 +335,7 @@ create policy "Pengajar read pengajars" on pengajars for select using (public.us
 create policy "Pengajar read santris" on santris for select using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group(group_id));
 create policy "Pengajar read groups" on groups for select using (public.user_role() = 'PENGAJAR');
 create policy "Pengajar read group_pengajars" on group_pengajars for select using (public.user_role() = 'PENGAJAR');
-create policy "Pengajar read jadwals" on jadwals for select using (public.user_role() = 'PENGAJAR');
+create policy "Pengajar read jadwals" on jadwals for select using (public.user_role() = 'PENGAJAR' and pengajar_id = public.pengajar_id());
 create policy "Pengajar read pertemuans" on pertemuans for select using (public.user_role() = 'PENGAJAR');
 create policy "Pengajar write pertemuans" on pertemuans for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group(group_id)) with check (public.user_role() = 'PENGAJAR' and public.pengajar_in_group(group_id));
 create policy "Pengajar write absensis" on absensis for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));

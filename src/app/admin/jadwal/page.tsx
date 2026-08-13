@@ -3,27 +3,20 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Pencil, Trash2, Clock } from "lucide-react";
+import { Plus, Trash2, Clock, Users } from "lucide-react";
 import { formatHari, formatTime } from "@/lib/format";
 
 interface Jadwal {
   id: string;
-  group_id: string;
+  pengajar_id: string | null;
   hari: string;
   jam_mulai: string;
   jam_selesai: string;
-  is_active: boolean;
-  groups?: { nama_group: string };
-}
-
-interface Group {
-  id: string;
-  nama_group: string;
+  pengajars?: { nama: string };
 }
 
 interface Pengajar {
@@ -31,30 +24,37 @@ interface Pengajar {
   nama: string;
 }
 
-const HARI_ORDER = ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU", "MINGGU"];
+const HARI_ORDER = ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT"];
 const HARI_LABEL: Record<string, string> = {
   SENIN: "Senin", SELASA: "Selasa", RABU: "Rabu",
-  KAMIS: "Kamis", JUMAT: "Jumat", SABTU: "Sabtu", MINGGU: "Minggu",
+  KAMIS: "Kamis", JUMAT: "Jumat",
+};
+
+const SESI_OPTIONS = [
+  { label: "Pagi (07:30 - 10:00)", value: "PAGI" },
+  { label: "Sore (16:00 - 17:30)", value: "SORE" },
+];
+
+const SESI_JAM: Record<string, { jam_mulai: string; jam_selesai: string }> = {
+  PAGI: { jam_mulai: "07:30", jam_selesai: "10:00" },
+  SORE: { jam_mulai: "16:00", jam_selesai: "17:30" },
 };
 
 export default function JadwalPage() {
   const [jadwals, setJadwals] = useState<Jadwal[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
   const [pengajars, setPengajars] = useState<Pengajar[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Jadwal | null>(null);
-  const [form, setForm] = useState({ group_id: "", pengajar_id: "", hari: "", jam_mulai: "", jam_selesai: "" });
+  const [form, setForm] = useState({ pengajar_id: "", hari: "", sesi: "PAGI" });
   const supabase = createClient();
 
   const fetchData = async () => {
-    const [jadwalRes, groupRes, pengajarRes] = await Promise.all([
-      supabase.from("jadwals").select("*, groups(nama_group)").order("jam_mulai"),
-      supabase.from("groups").select("id, nama_group").order("nama_group"),
+    const [jadwalRes, pengajarRes] = await Promise.all([
+      supabase.from("jadwals").select("*, pengajars(nama)").order("jam_mulai"),
       supabase.from("pengajars").select("id, nama").order("nama"),
     ]);
     setJadwals(jadwalRes.data ?? []);
-    setGroups(groupRes.data ?? []);
     setPengajars(pengajarRes.data ?? []);
     setLoading(false);
   };
@@ -63,36 +63,34 @@ export default function JadwalPage() {
 
   const openAdd = (hari?: string) => {
     setEditing(null);
-    setForm({ group_id: "", pengajar_id: "", hari: hari ?? "", jam_mulai: "", jam_selesai: "" });
+    setForm({ pengajar_id: "", hari: hari ?? "", sesi: "PAGI" });
     setDialogOpen(true);
   };
 
   const openEdit = (j: Jadwal) => {
+    const sesi = j.jam_mulai.slice(0, 5) === "07:30" ? "PAGI" : "SORE";
     setEditing(j);
-    setForm({ group_id: j.group_id, pengajar_id: "", hari: j.hari, jam_mulai: j.jam_mulai, jam_selesai: j.jam_selesai });
+    setForm({ pengajar_id: j.pengajar_id ?? "", hari: j.hari, sesi });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!form.group_id || !form.hari) {
-      alert("Kelas dan hari wajib diisi")
+    if (!form.pengajar_id || !form.hari) {
+      alert("Pengajar dan hari wajib diisi")
       return
     }
-    const payload = { group_id: form.group_id, hari: form.hari, jam_mulai: form.jam_mulai, jam_selesai: form.jam_selesai };
+    const jam = SESI_JAM[form.sesi];
+    const payload = {
+      pengajar_id: form.pengajar_id,
+      hari: form.hari,
+      jam_mulai: jam.jam_mulai,
+      jam_selesai: jam.jam_selesai,
+    };
     if (editing) {
       await supabase.from("jadwals").update(payload).eq("id", editing.id);
     } else {
       await supabase.from("jadwals").insert(payload);
     }
-
-    // assign teacher to the class (group_pengajars)
-    if (form.pengajar_id) {
-      await supabase.from("group_pengajars").upsert(
-        { group_id: form.group_id, pengajar_id: form.pengajar_id },
-        { onConflict: "group_id,pengajar_id" }
-      );
-    }
-
     setDialogOpen(false);
     fetchData();
   };
@@ -113,7 +111,7 @@ export default function JadwalPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Jadwal Mengajar</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Kelola jadwal TPA per hari</p>
+          <p className="mt-1 text-sm text-muted-foreground">Atur jadwal mengajar pengajar per hari</p>
         </div>
         <Button onClick={() => openAdd()} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Jadwal
@@ -121,8 +119,8 @@ export default function JadwalPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4">
-          {Array.from({ length: 7 }).map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="space-y-3">
               <div className="h-9 rounded-lg bg-muted animate-pulse" />
               <div className="h-24 rounded-lg bg-muted animate-pulse" />
@@ -130,7 +128,7 @@ export default function JadwalPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {jadwalByHari.map(({ hari, items }) => (
             <div key={hari} className="space-y-3">
               <div className="flex items-center justify-between">
@@ -156,12 +154,15 @@ export default function JadwalPage() {
                     >
                       <CardContent className="pt-3 pb-3">
                         <div className="flex items-start justify-between mb-1.5">
-                          <span className="text-sm font-medium text-foreground leading-tight">
-                            {j.groups?.nama_group ?? "-"}
-                          </span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="text-sm font-medium text-foreground leading-tight truncate">
+                              {j.pengajars?.nama ?? "-"}
+                            </span>
+                          </div>
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDelete(j.id); }}
-                            className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
+                            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -187,15 +188,6 @@ export default function JadwalPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Kelas</Label>
-              <Select value={form.group_id} onValueChange={(v: string | null) => v && setForm({ ...form, group_id: v })} items={groups.map((g) => ({ label: g.nama_group, value: g.id }))}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>
-                <SelectContent>
-                  {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.nama_group}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label>Pengajar</Label>
               <Select value={form.pengajar_id} onValueChange={(v: string | null) => v && setForm({ ...form, pengajar_id: v })} items={pengajars.map((p) => ({ label: p.nama, value: p.id }))}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Pilih pengajar" /></SelectTrigger>
@@ -213,15 +205,17 @@ export default function JadwalPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Jam Mulai</Label>
-                <Input type="time" value={form.jam_mulai} onChange={(e) => setForm({ ...form, jam_mulai: e.target.value })} className="h-9" />
-              </div>
-              <div className="space-y-2">
-                <Label>Jam Selesai</Label>
-                <Input type="time" value={form.jam_selesai} onChange={(e) => setForm({ ...form, jam_selesai: e.target.value })} className="h-9" />
-              </div>
+            <div className="space-y-2">
+              <Label>Sesi</Label>
+              <Select value={form.sesi} onValueChange={(v: string | null) => v && setForm({ ...form, sesi: v })} items={SESI_OPTIONS}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SESI_OPTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Pagi: 07:30 - 10:00 · Sore: 16:00 - 17:30
+              </p>
             </div>
           </div>
           <DialogFooter>

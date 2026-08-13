@@ -17,8 +17,9 @@ interface Absensi {
   status: string;
   keterangan: string | null;
   created_at: string;
-  santris?: { nama: string };
-  pertemuans?: { tanggal: string; jadwals?: { groups?: { nama_group: string } } };
+  santris?: { nama: string; groups?: { nama_group: string } };
+
+  pertemuans?: { tanggal: string };
 }
 
 interface Santri { id: string; nama: string; }
@@ -64,7 +65,7 @@ export default function PresensiPage() {
 
       let query = supabase
         .from("absensis")
-        .select("*, santris(nama), pertemuans(tanggal, jadwals(groups(nama_group)))")
+        .select("*, santris(nama, groups(nama_group)), pertemuans(tanggal)")
         .eq("teacher_id", pengajar.id)
         .order("created_at", { ascending: false });
 
@@ -206,7 +207,7 @@ export default function PresensiPage() {
                     <div>
                       <div className="font-medium text-foreground">{a.santris?.nama}</div>
                       <div className="text-sm text-muted-foreground">
-                        {a.pertemuans?.jadwals?.groups?.nama_group} - {formatDateShort(a.pertemuans?.tanggal ?? "")}
+                        {a.santris?.groups?.nama_group} - {formatDateShort(a.pertemuans?.tanggal ?? "")}
                       </div>
                     </div>
                   </div>

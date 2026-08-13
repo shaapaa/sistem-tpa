@@ -138,10 +138,14 @@ export default function PerkembanganPage() {
           .maybeSingle();
 
         if (!existingAbsen) {
+          const HARI_MAP = ["MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"];
+          const todayHari = HARI_MAP[new Date().getDay()];
+
           const { data: jadwal } = await supabase
             .from("jadwals")
             .select("id")
-            .eq("group_id", santri.group_id)
+            .eq("pengajar_id", pengajar.id)
+            .eq("hari", todayHari)
             .limit(1)
             .maybeSingle();
 

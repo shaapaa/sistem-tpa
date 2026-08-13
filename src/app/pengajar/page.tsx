@@ -13,7 +13,6 @@ interface Jadwal {
   hari: string;
   jam_mulai: string;
   jam_selesai: string;
-  groups?: { nama_group: string };
 }
 
 interface PengajarData {
@@ -46,13 +45,12 @@ export default function PengajarDashboard() {
         .eq("pengajar_id", pengajar.id);
 
       const groupIds = groupPengajars?.map((gp) => gp.group_id) ?? [];
-      if (groupIds.length === 0) return;
 
-      // Get jadwals
+      // Get jadwals by pengajar
       const { data: jadwalData } = await supabase
         .from("jadwals")
-        .select("*, groups(nama_group)")
-        .in("group_id", groupIds)
+        .select("id, hari, jam_mulai, jam_selesai")
+        .eq("pengajar_id", pengajar.id)
         .order("hari");
 
       setJadwals(jadwalData ?? []);
@@ -126,7 +124,7 @@ export default function PengajarDashboard() {
             {jadwals.map((j) => (
               <div key={j.id} className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 hover:bg-muted/50 transition-colors duration-200">
                 <div>
-                  <div className="font-medium text-foreground">{j.groups?.nama_group ?? "-"}</div>
+                  <div className="font-medium text-foreground">{j.jam_mulai.slice(0, 5) === "07:30" ? "Sesi Pagi" : "Sesi Sore"}</div>
                   <div className="text-sm text-muted-foreground mt-0.5">{formatHari(j.hari)} · <span className="font-tabular">{formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}</span></div>
                 </div>
               </div>
