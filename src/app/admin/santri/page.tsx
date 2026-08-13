@@ -26,12 +26,14 @@ interface Santri {
   iuran: number | null
   keterangan: string | null
   pendidikan_saat_ini: string | null
+  sesi: string | null
   groups?: { nama_group: string }
 }
 
 interface Group {
   id: string
   nama_group: string
+  sesi: string | null
 }
 
 export default function SantriPage() {
@@ -54,13 +56,14 @@ export default function SantriPage() {
     iuran: "",
     keterangan: "",
     pendidikan_saat_ini: "",
+    sesi: "",
   })
   const supabase = createClient()
 
   const fetchData = async () => {
     const [santriRes, groupRes] = await Promise.all([
-      supabase.from("santris").select("*, groups(nama_group)").order("nama"),
-      supabase.from("groups").select("id, nama_group").order("nama_group"),
+      supabase.from("santris").select("*, groups(nama_group, sesi)").order("nama"),
+      supabase.from("groups").select("id, nama_group, sesi").order("nama_group"),
     ])
     setSantris(santriRes.data ?? [])
     setGroups(groupRes.data ?? [])
@@ -71,7 +74,7 @@ export default function SantriPage() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ nama: "", jenis_kelamin: "", tanggal_lahir: "", group_id: "", nama_ayah: "", nama_ibu: "", no_hp_wali: "", pekerjaan_ayah: "", pekerjaan_ibu: "", iuran: "", keterangan: "", pendidikan_saat_ini: "" })
+    setForm({ nama: "", jenis_kelamin: "", tanggal_lahir: "", group_id: "", nama_ayah: "", nama_ibu: "", no_hp_wali: "", pekerjaan_ayah: "", pekerjaan_ibu: "", iuran: "", keterangan: "", pendidikan_saat_ini: "", sesi: "" })
     setDialogOpen(true)
   }
 
@@ -90,6 +93,7 @@ export default function SantriPage() {
       iuran: s.iuran?.toString() ?? "",
       keterangan: s.keterangan ?? "",
       pendidikan_saat_ini: s.pendidikan_saat_ini ?? "",
+      sesi: s.sesi ?? "",
     })
     setDialogOpen(true)
   }
@@ -108,6 +112,7 @@ export default function SantriPage() {
       iuran: form.iuran ? parseFloat(form.iuran) : 0,
       keterangan: form.keterangan || null,
       pendidikan_saat_ini: form.pendidikan_saat_ini || null,
+      sesi: form.sesi || null,
     }
 
     if (editing) {
@@ -176,6 +181,7 @@ export default function SantriPage() {
                 <h3 className="font-semibold text-foreground mb-1">{s.nama}</h3>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   <Badge variant="outline" className="text-[10px]">{s.groups?.nama_group ?? "-"}</Badge>
+                  <Badge variant="secondary" className="text-[10px]">{s.sesi === "PAGI" ? "Pagi" : s.sesi === "SORE" ? "Sore" : "-"}</Badge>
                   <Badge variant="secondary" className="text-[10px]">{formatGender(s.jenis_kelamin)}</Badge>
                   {s.keterangan && <Badge variant="secondary" className="text-[10px]">{s.keterangan}</Badge>}
                 </div>
@@ -216,11 +222,21 @@ export default function SantriPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Kelas</Label>
-                <Select value={form.group_id} onValueChange={(v: string | null) => v && setForm({ ...form, group_id: v })} items={groups.map((g) => ({ label: g.nama_group, value: g.id }))}>
+                <Label>Kelas (Pagi/Sore)</Label>
+                <Select value={form.sesi} onValueChange={(v: string | null) => { const sesi = v ?? ""; setForm({ ...form, sesi, group_id: "" }) }} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Pilih sesi" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PAGI">Pagi</SelectItem>
+                    <SelectItem value="SORE">Sore</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Kelas (Detail)</Label>
+                <Select value={form.group_id} onValueChange={(v: string | null) => v && setForm({ ...form, group_id: v })} disabled={!form.sesi} items={groups.filter((g) => g.sesi === form.sesi || !form.sesi).map((g) => ({ label: g.nama_group, value: g.id }))}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>
                   <SelectContent>
-                    {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.nama_group}</SelectItem>)}
+                    {groups.filter((g) => g.sesi === form.sesi || !form.sesi).map((g) => <SelectItem key={g.id} value={g.id}>{g.nama_group}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

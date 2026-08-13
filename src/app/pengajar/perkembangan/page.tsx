@@ -88,9 +88,14 @@ export default function PerkembanganPage() {
   useEffect(() => {
     const fetchSantris = async () => {
       if (!selectedSesi) { setSantris([]); return; }
-      const groupIds = groups.filter((g) => g.sesi === selectedSesi).map((g) => g.id);
+      const groupIds = groups.map((g) => g.id);
       if (groupIds.length === 0) { setSantris([]); return; }
-      const { data } = await supabase.from("santris").select("id, nama, group_id").in("group_id", groupIds).order("nama");
+      const { data } = await supabase
+        .from("santris")
+        .select("id, nama, group_id")
+        .eq("sesi", selectedSesi)
+        .in("group_id", groupIds)
+        .order("nama");
       setSantris(data ?? []);
       setSelectedSantri("");
       setSearch("");

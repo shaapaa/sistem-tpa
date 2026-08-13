@@ -76,6 +76,7 @@ create table santris (
   iuran numeric(10,2) default 0,
   keterangan text check (keterangan in ('IQRA', 'QURAN')),
   pendidikan_saat_ini text,
+  sesi text check (sesi in ('PAGI', 'SORE')),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
