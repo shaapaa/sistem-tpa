@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Download, Calendar, BookOpen, BookMarked, Moon } from "lucide-react";
 import Link from "next/link";
@@ -41,6 +42,8 @@ export default function LaporanPage() {
   const [selectedSantri, setSelectedSantri] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [catatanLaporan, setCatatanLaporan] = useState("");
+  const [catatanSaved, setCatatanSaved] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -134,6 +137,10 @@ export default function LaporanPage() {
       html += `</table>`;
     }
 
+    if (catatanLaporan) {
+      html += `<h2>Catatan Pengajar</h2><p>${catatanLaporan.replace(/\n/g, "<br/>")}</p>`;
+    }
+
     html += `</body></html>`;
     return html;
   };
@@ -183,6 +190,29 @@ export default function LaporanPage() {
           <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
         </div>
       </div>
+
+      <Card className="card-elevated">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-medium">Catatan Pengajar</CardTitle>
+          {catatanSaved && <span className="text-xs text-green-600">Tersimpan</span>}
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            value={catatanLaporan}
+            onChange={(e) => { setCatatanLaporan(e.target.value); setCatatanSaved(false); }}
+            placeholder="Tambahkan catatan pengajar yang akan disertakan dalam laporan..."
+            className="min-h-[100px]"
+          />
+          <Button
+            onClick={() => setCatatanSaved(true)}
+            className="h-9 px-4"
+            disabled={catatanSaved}
+          >
+            Simpan Catatan
+          </Button>
+          <p className="text-xs text-muted-foreground">Catatan ini akan disertakan saat laporan diunduh.</p>
+        </CardContent>
+      </Card>
 
       <Card className="card-elevated">
         <CardHeader>
