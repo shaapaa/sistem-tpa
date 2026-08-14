@@ -205,7 +205,7 @@ export default function PengajarPage() {
           {filtered.map((p) => (
             <Card
               key={p.id}
-              className="card-elevated card-elevated-hover cursor-pointer"
+              className="card-elevated card-elevated-hover cursor-pointer group"
               onClick={() => openEdit(p)}
             >
               <CardContent className="pt-4 pb-4">
