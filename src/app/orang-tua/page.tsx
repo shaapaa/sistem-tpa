@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Users, BookOpen, BookMarked, Moon, TrendingUp, Calendar } from "lucide-react";
+import { Users, BookOpen, BookMarked, Moon, Calendar } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
 
 interface SantriData {

@@ -5,30 +5,17 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-provider"
 import { createClient } from "@/lib/supabase/client"
-import { adminNav, pengajarNav, orangTuaNav } from "@/lib/constants"
-import { LogOut, LayoutDashboard, Users, GraduationCap, BookOpen, Calendar, ClipboardCheck, Baby, BarChart3, FileText } from "lucide-react"
-import type { NavItem } from "@/lib/constants"
+import { LogOut, LayoutDashboard } from "lucide-react"
+import { iconMap, navItemsForRole, isNavItemActive, type NavItem } from "@/lib/nav"
+import { useMemo } from "react"
 
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  LayoutDashboard,
-  Users,
-  GraduationCap,
-  BookOpen,
-  Calendar,
-  ClipboardCheck,
-  Baby,
-  BarChart3,
-  FileText,
-}
-
-function NavLinks({ items, className }: { items: NavItem[]; className?: string }) {
+function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname()
 
   return (
-    <nav className={cn("flex flex-col gap-0.5", className)}>
+    <nav className="flex flex-col gap-0.5">
       {items.map((item) => {
-        const isActive = pathname === item.href ||
-          (item.href !== "/admin" && item.href !== "/pengajar" && item.href !== "/orang-tua" && pathname.startsWith(item.href))
+        const isActive = isNavItemActive(pathname, item.href)
         const Icon = iconMap[item.iconName] || LayoutDashboard
 
         return (
@@ -69,17 +56,12 @@ export function Sidebar() {
   const { profile, loading } = useAuth()
   const router = useRouter()
   const supabase = createClient()
+  const navItems = useMemo(() => navItemsForRole(profile?.role), [profile?.role])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/login")
   }
-
-  const navItems = profile?.role === "ADMIN"
-    ? adminNav
-    : profile?.role === "PENGAJAR"
-    ? pengajarNav
-    : orangTuaNav
 
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r lg:border-border lg:bg-card">

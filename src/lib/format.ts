@@ -31,10 +31,7 @@ export function formatStatus(status: string): string {
     APPROVED: "Disetujui",
     REJECTED: "Ditolak",
   };
-  return map[status] ?? status
-    .replace(/_/g, " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return map[status] ?? status;
 }
 
 export function formatHari(hari: string): string {
@@ -84,10 +81,6 @@ export function formatDateShort(date: string): string {
     month: "short",
     year: "numeric",
   });
-}
-
-export function formatNilai(nilai: number): string {
-  return `${nilai}`;
 }
 
 export function getStatusBadgeVariant(status: string): "default" | "success" | "warning" | "destructive" | "secondary" {

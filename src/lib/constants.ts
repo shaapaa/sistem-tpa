@@ -28,6 +28,5 @@ export const pengajarNav: NavItem[] = [
 export const orangTuaNav: NavItem[] = [
   { label: "Dashboard", href: "/orang-tua", iconName: "LayoutDashboard" },
   { label: "Anak", href: "/orang-tua/anak", iconName: "Baby" },
-  { label: "Progres", href: "/orang-tua/progres", iconName: "BarChart3" },
   { label: "Laporan", href: "/orang-tua/laporan", iconName: "FileText" },
 ];
