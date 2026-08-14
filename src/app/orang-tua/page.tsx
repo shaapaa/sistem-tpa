@@ -97,12 +97,9 @@ export default function OrangTuaDashboard() {
   const needsWorkCount = perkembangans.filter(p => p.penilaian === "KURANG").length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Rekap perkembangan {santri?.nama ?? "anak Anda"}</p>
-        </div>
+    <div className="stagger flex flex-col gap-6">
+      <div className="flex flex-col gap-4 border-b border-border/70 pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div><p className="eyebrow">Ruang orang tua</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-balance">Perkembangan anak</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Rekap perjalanan belajar {santri?.nama ?? "anak Anda"}.</p></div>
         <div className="w-48">
           <Label>Periode</Label>
           <Select value={period} onValueChange={(v: string | null) => v && setPeriod(v)} items={[{ label: "Minggu Ini", value: "week" }, { label: "Bulan Ini", value: "month" }, { label: "3 Bulan", value: "quarter" }, { label: "Tahun Ini", value: "year" }]}>

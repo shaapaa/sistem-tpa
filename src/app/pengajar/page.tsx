@@ -68,11 +68,8 @@ export default function PengajarDashboard() {
   }, [user]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard Pengajar</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Jadwal dan jumlah santri Anda</p>
-      </div>
+    <div className="stagger flex flex-col gap-6">
+      <div className="border-b border-border/70 pb-6"><p className="eyebrow">Ruang pengajar</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-balance">Dashboard Pengajar</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Jadwal, kelas, dan langkah berikutnya untuk santri Anda.</p></div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card className="card-elevated card-elevated-hover">

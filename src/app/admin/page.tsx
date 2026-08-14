@@ -68,10 +68,10 @@ export default function AdminDashboard() {
   ]
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard Admin</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Ringkasan data TPA Baitul Yatama</p>
+    <div className="stagger flex flex-col gap-6">
+      <div className="flex flex-col gap-2 border-b border-border/70 pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div><p className="eyebrow">Ringkasan operasional</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-balance">Dashboard Admin</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Pantau ritme belajar dan kehadiran TPA Baitul Yatama.</p></div>
+        <div className="rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary">Data terbaru</div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
