@@ -216,13 +216,13 @@ export default function PengajarPage() {
                   <div className="flex gap-1">
                     <button
                       onClick={(e) => { e.stopPropagation(); openEdit(p); }}
-                      className="opacity-0 group-hover:opacity-100 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+                      className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setConfirmDel(p); }}
-                      className="opacity-0 group-hover:opacity-100 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
+                      className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>

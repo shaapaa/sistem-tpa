@@ -174,10 +174,10 @@ export default function SantriPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary text-sm font-semibold">{s.nama.charAt(0)}</div>
                   <div className="flex gap-1">
-                    <button onClick={(e) => { e.stopPropagation(); openEdit(s); }} className="opacity-0 group-hover:opacity-100 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200">
+                    <button onClick={(e) => { e.stopPropagation(); openEdit(s); }} className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200">
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); setConfirmDel(s); }} className="opacity-0 group-hover:opacity-100 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200">
+                    <button onClick={(e) => { e.stopPropagation(); setConfirmDel(s); }} className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
