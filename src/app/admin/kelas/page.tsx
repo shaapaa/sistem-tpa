@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Search, Users, BookOpen, Sun, Moon, Calendar } from "lucide-react"
+import { Plus, Pencil, Trash2, Users, BookOpen, Sun, Moon, Calendar } from "lucide-react"
 import { formatSesi, formatTingkat } from "@/lib/format"
 
 interface Group {
@@ -32,6 +33,8 @@ export default function KelasPage() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Group | null>(null)
+  const [confirmDel, setConfirmDel] = useState<Group | null>(null)
+  const [errorMsg, setErrorMsg] = useState("")
   const [form, setForm] = useState({
     nama_group: "",
     sesi: "PAGI",
@@ -42,10 +45,14 @@ export default function KelasPage() {
 
   const fetchData = async () => {
     const [groupsRes, pengajarsRes] = await Promise.all([
-      supabase.from("groups").select("*, pengajars(nama)").order("nama_group"),
+      supabase.from("groups").select("*, group_pengajars(pengajar_id, pengajars(nama))").order("nama_group"),
       supabase.from("pengajars").select("id, nama").order("nama"),
     ])
-    setGroups(groupsRes.data ?? [])
+    setGroups((groupsRes.data ?? []).map((g: any) => ({
+      ...g,
+      pengajar_id: g.group_pengajars?.[0]?.pengajar_id ?? null,
+      pengajars: g.group_pengajars?.[0]?.pengajars ? [g.group_pengajars[0].pengajars] : undefined,
+    })))
     setPengajars(pengajarsRes.data ?? [])
     setLoading(false)
   }
@@ -70,26 +77,41 @@ export default function KelasPage() {
   }
 
   const handleSave = async () => {
+    if (!form.nama_group) {
+      setErrorMsg("Nama kelas wajib diisi")
+      return
+    }
     const payload = {
       nama_group: form.nama_group,
       sesi: form.sesi,
       tingkat: form.tingkat,
-      pengajar_id: form.pengajar_id || null,
     }
 
+    let groupId = editing?.id
     if (editing) {
       await supabase.from("groups").update(payload).eq("id", editing.id)
     } else {
-      await supabase.from("groups").insert(payload)
+      const { data: newGroup } = await supabase.from("groups").insert(payload).select("id").single()
+      groupId = newGroup?.id
+    }
+
+    // update pengajar assignment via join table
+    if (groupId) {
+      await supabase.from("group_pengajars").delete().eq("group_id", groupId)
+      if (form.pengajar_id) {
+        await supabase.from("group_pengajars").insert({ group_id: groupId, pengajar_id: form.pengajar_id })
+      }
     }
 
     setDialogOpen(false)
     fetchData()
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Hapus kelas ini?")) return
-    await supabase.from("groups").delete().eq("id", id)
+  const handleDelete = async () => {
+    if (!confirmDel) return
+    await supabase.from("group_pengajars").delete().eq("group_id", confirmDel.id)
+    await supabase.from("groups").delete().eq("id", confirmDel.id)
+    setConfirmDel(null)
     fetchData()
   }
 
@@ -125,14 +147,17 @@ export default function KelasPage() {
           {sesiOrder.map((sesi) => (
             <div key={sesi} className="space-y-4">
               <div className="flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                {sesi === "PAGI" ? <Sun className="h-4 w-4 text-amber-500" /> : <Moon className="h-4 w-4 text-indigo-500" />}
                 <h2 className="font-semibold text-foreground">{formatSesi(sesi)}</h2>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {tingkatOrder.map((tingkat) => {
-                  const group = sortedGroups.find((g) => g.sesi === sesi && g.tingkat === tingkat)
-                  if (!group) return null
-                  return (
+                {sortedGroups.filter((g) => g.sesi === sesi).length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border p-8 text-center sm:col-span-2 lg:col-span-3">
+                    <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
+                    <p className="text-sm text-muted-foreground">Belum ada kelas sesi {formatSesi(sesi).toLowerCase()}</p>
+                  </div>
+                ) : (
+                  sortedGroups.filter((g) => g.sesi === sesi).map((group) => (
                     <Card key={group.id} className="card-elevated card-elevated-hover">
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
@@ -142,21 +167,21 @@ export default function KelasPage() {
                       </CardHeader>
                       <CardContent className="space-y-3 pt-0">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar className="h-3.5 w-3.5 shrink-0" />
+                          <Users className="h-3.5 w-3.5 shrink-0" />
                           <span>Pengajar: {group.pengajars?.[0]?.nama ?? "Belum ditetapkan"}</span>
                         </div>
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => openEdit(group)} className="flex-1">
                             <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleDelete(group.id)} className="flex-1 text-destructive hover:bg-destructive/10">
+                          <Button variant="outline" size="sm" onClick={() => setConfirmDel(group)} className="flex-1 text-destructive hover:bg-destructive/10">
                             <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Hapus
                           </Button>
                         </div>
                       </CardContent>
                     </Card>
-                  )
-                })}
+                  ))
+                )}
               </div>
             </div>
           ))}
@@ -176,8 +201,8 @@ export default function KelasPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Sesi</Label>
-                <Select value={form.sesi} onValueChange={(v: string | null) => v && setForm({ ...form, sesi: v })} items={[{ label: "Pilih", value: "" }, { label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Pilih" /></SelectTrigger>
+                <Select value={form.sesi} onValueChange={(v: string | null) => v && setForm({ ...form, sesi: v })} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PAGI">Pagi</SelectItem>
                     <SelectItem value="SORE">Sore</SelectItem>
@@ -186,8 +211,8 @@ export default function KelasPage() {
               </div>
               <div className="space-y-2">
                 <Label>Tingkat</Label>
-                <Select value={form.tingkat} onValueChange={(v: string | null) => v && setForm({ ...form, tingkat: v })} items={[{ label: "Pilih", value: "" }, { label: "IQRA", value: "IQRA" }, { label: "Quran", value: "QURAN" }]}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Pilih" /></SelectTrigger>
+                <Select value={form.tingkat} onValueChange={(v: string | null) => v && setForm({ ...form, tingkat: v })} items={[{ label: "IQRA", value: "IQRA" }, { label: "Quran", value: "QURAN" }]}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="IQRA">IQRA</SelectItem>
                     <SelectItem value="QURAN">Quran</SelectItem>
@@ -214,6 +239,25 @@ export default function KelasPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDel}
+        onOpenChange={(o) => !o && setConfirmDel(null)}
+        title="Hapus Kelas"
+        message={`Hapus kelas ${confirmDel?.nama_group}?`}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={!!errorMsg}
+        onOpenChange={(o) => !o && setErrorMsg("")}
+        title="Perhatian"
+        message={errorMsg}
+        confirmLabel="OK"
+      />
     </div>
   )
 }

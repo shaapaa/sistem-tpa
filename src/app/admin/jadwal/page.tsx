@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Trash2, Clock, Users } from "lucide-react";
 import { formatHari, formatTime } from "@/lib/format";
@@ -47,6 +48,8 @@ export default function JadwalPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Jadwal | null>(null);
   const [form, setForm] = useState({ pengajar_id: "", hari: "", sesi: "PAGI" });
+  const [confirmDel, setConfirmDel] = useState<Jadwal | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
   const supabase = createClient();
 
   const fetchData = async () => {
@@ -76,7 +79,7 @@ export default function JadwalPage() {
 
   const handleSave = async () => {
     if (!form.pengajar_id || !form.hari) {
-      alert("Pengajar dan hari wajib diisi")
+      setErrorMsg("Pengajar dan hari wajib diisi")
       return
     }
     const jam = SESI_JAM[form.sesi];
@@ -95,8 +98,10 @@ export default function JadwalPage() {
     fetchData();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Hapus jadwal ini?")) return;
+  const handleDelete = async () => {
+    if (!confirmDel) return
+    const id = confirmDel.id
+    setConfirmDel(null)
     await supabase.from("jadwals").delete().eq("id", id);
     fetchData();
   };
@@ -161,7 +166,7 @@ export default function JadwalPage() {
                             </span>
                           </div>
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(j.id); }}
+                            onClick={(e) => { e.stopPropagation(); setConfirmDel(j); }}
                             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -224,6 +229,25 @@ export default function JadwalPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDel}
+        onOpenChange={(o) => !o && setConfirmDel(null)}
+        title="Hapus Jadwal"
+        message={`Hapus jadwal ini?`}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={!!errorMsg}
+        onOpenChange={(o) => !o && setErrorMsg("")}
+        title="Perhatian"
+        message={errorMsg}
+        confirmLabel="OK"
+      />
     </div>
   );
 }

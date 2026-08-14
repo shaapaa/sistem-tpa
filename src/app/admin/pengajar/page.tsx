@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Users, Search, GraduationCap } from "lucide-react"
+import { Plus, Pencil, Trash2, Users, Search, GraduationCap, Eye, EyeOff } from "lucide-react"
 import { formatGender, formatRole } from "@/lib/format"
 
 interface Pengajar {
@@ -26,6 +27,10 @@ export default function PengajarPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Pengajar | null>(null)
   const [search, setSearch] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [confirmDel, setConfirmDel] = useState<Pengajar | null>(null)
+  const [errorMsg, setErrorMsg] = useState("")
+  const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     nama: "",
     jenis_kelamin: "",
@@ -49,6 +54,7 @@ export default function PengajarPage() {
   const openAdd = () => {
     setEditing(null)
     setForm({ nama: "", jenis_kelamin: "", no_hp: "", username: "", password: "" })
+    setShowPassword(false)
     setDialogOpen(true)
   }
 
@@ -61,19 +67,29 @@ export default function PengajarPage() {
       username: p.users?.username ?? "",
       password: "",
     })
+    setShowPassword(false)
     setDialogOpen(true)
   }
 
   const handleSave = async () => {
+    if (!form.nama) {
+      setErrorMsg("Nama lengkap wajib diisi")
+      return
+    }
     if (!form.username) {
-      alert("Username wajib diisi")
+      setErrorMsg("Username wajib diisi")
       return
     }
     if (!editing && !form.password) {
-      alert("Password wajib diisi")
+      setErrorMsg("Password wajib diisi")
+      return
+    }
+    if (form.password && form.password.length < 6) {
+      setErrorMsg("Password minimal 6 karakter")
       return
     }
 
+    setSaving(true)
     const payload = {
       nama: form.nama,
       jenis_kelamin: form.jenis_kelamin || null,
@@ -82,49 +98,66 @@ export default function PengajarPage() {
 
     if (editing) {
       const { error: pengajarErr } = await supabase.from("pengajars").update(payload).eq("id", editing.id)
-      if (pengajarErr) { alert(pengajarErr.message); return }
+      if (pengajarErr) { setErrorMsg(pengajarErr.message); setSaving(false); return }
 
       if (editing.users?.id) {
-        await supabase.from("users").update({ username: form.username }).eq("id", editing.users.id)
+        const { error: userErr } = await supabase.from("users").update({ username: form.username }).eq("id", editing.users.id)
+        if (userErr) { setErrorMsg(userErr.message); setSaving(false); return }
         if (form.password) {
-          await supabase.auth.admin.updateUserById(editing.users.id, { password: form.password })
+          const { error: pwdErr } = await supabase.auth.admin.updateUserById(editing.users.id, { password: form.password })
+          if (pwdErr) { setErrorMsg(formatAuthError(pwdErr.message)); setSaving(false); return }
         }
       }
     } else {
       const { data: newPengajar, error: pengajarErr } = await supabase.from("pengajars").insert(payload).select().single()
-      if (pengajarErr) { alert(pengajarErr.message); return }
+      if (pengajarErr) { setErrorMsg(pengajarErr.message); setSaving(false); return }
       if (newPengajar) {
         const { data: authUser, error: authErr } = await supabase.auth.admin.createUser({
           email: `${form.username}@tpa-baitulyatama.local`,
           password: form.password,
           email_confirm: true,
         })
-        if (authErr) { alert(authErr.message); return }
+        if (authErr) {
+          await supabase.from("pengajars").delete().eq("id", newPengajar.id)
+          setErrorMsg(formatAuthError(authErr.message))
+          setSaving(false)
+          return
+        }
         if (authUser.user) {
-          await supabase.from("users").insert({
+          const { error: userInsertErr } = await supabase.from("users").insert({
             id: authUser.user.id,
             username: form.username,
             role: "PENGAJAR",
           })
+          if (userInsertErr) {
+            await supabase.auth.admin.deleteUser(authUser.user.id)
+            await supabase.from("pengajars").delete().eq("id", newPengajar.id)
+            setErrorMsg(userInsertErr.message.includes("duplicate") || userInsertErr.message.includes("unique")
+              ? `Username "${form.username}" sudah digunakan`
+              : userInsertErr.message)
+            setSaving(false)
+            return
+          }
           await supabase.from("pengajars").update({ user_id: authUser.user.id }).eq("id", newPengajar.id)
         }
       }
     }
 
+    setSaving(false)
     setDialogOpen(false)
     fetchData()
   }
 
-  const handleDelete = async (p: Pengajar) => {
-    if (!confirm(`Hapus pengajar ${p.nama}?`)) return
+  const handleDelete = async () => {
+    if (!confirmDel) return
+    const p = confirmDel
+    setConfirmDel(null)
 
-    // remove login + linked users row first (user_id FK is RESTRICT, pengajar must still exist)
     if (p.users?.id) {
       await supabase.auth.admin.deleteUser(p.users.id)
       await supabase.from("users").delete().eq("id", p.users.id)
     }
 
-    // cascade deletes group_pengajars, absensis, pertemuans, perkembangan, etc.
     await supabase.from("pengajars").delete().eq("id", p.id)
     fetchData()
   }
@@ -188,7 +221,7 @@ export default function PengajarPage() {
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(p); }}
+                      onClick={(e) => { e.stopPropagation(); setConfirmDel(p); }}
                       className="opacity-0 group-hover:opacity-100 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -239,15 +272,64 @@ export default function PengajarPage() {
             </div>
             <div className="space-y-2">
               <Label>Password {editing ? "(kosongkan jika tidak diubah)" : ""}</Label>
-              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="h-9" placeholder={editing ? "Biarkan kosong untuk tidak mengubah" : "Password login"} />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  className="h-9 pr-10"
+                  placeholder={editing ? "Biarkan kosong untuk tidak mengubah" : "Password login"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="h-9">Batal</Button>
-            <Button onClick={handleSave} className="h-9">{editing ? "Simpan Perubahan" : "Tambah Pengajar"}</Button>
+            <Button onClick={handleSave} disabled={saving} className="h-9">{saving ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Tambah Pengajar"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDel}
+        onOpenChange={(o) => !o && setConfirmDel(null)}
+        title="Hapus Pengajar"
+        message={`Hapus pengajar ${confirmDel?.nama} beserta akun loginnya?`}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={!!errorMsg}
+        onOpenChange={(o) => !o && setErrorMsg("")}
+        title="Perhatian"
+        message={errorMsg}
+        confirmLabel="OK"
+      />
     </div>
   )
+}
+
+function formatAuthError(msg: string): string {
+  const lower = msg.toLowerCase()
+  if (lower.includes("already been registered") || lower.includes("already registered") || lower.includes("duplicate")) {
+    return "Username / email sudah digunakan"
+  }
+  if (lower.includes("invalid") && lower.includes("password")) {
+    return "Password tidak valid (minimal 6 karakter)"
+  }
+  if (lower.includes("not allowed") || lower.includes("forbidden") || lower.includes("unauthorized")) {
+    return "Operasi tidak diizinkan. Periksa kembali username — kemungkinan sudah digunakan oleh akun lain."
+  }
+  return msg
 }

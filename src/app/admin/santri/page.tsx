@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Plus, Pencil, Trash2, Users, Search } from "lucide-react"
@@ -43,6 +44,7 @@ export default function SantriPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Santri | null>(null)
   const [search, setSearch] = useState("")
+  const [confirmDel, setConfirmDel] = useState<Santri | null>(null)
   const [form, setForm] = useState({
     nama: "",
     jenis_kelamin: "",
@@ -125,8 +127,10 @@ export default function SantriPage() {
     fetchData()
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Hapus santri ini?")) return
+  const handleDelete = async () => {
+    if (!confirmDel) return
+    const id = confirmDel.id
+    setConfirmDel(null)
     await supabase.from("santris").delete().eq("id", id)
     fetchData()
   }
@@ -173,7 +177,7 @@ export default function SantriPage() {
                     <button onClick={(e) => { e.stopPropagation(); openEdit(s); }} className="opacity-0 group-hover:opacity-100 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200">
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} className="opacity-0 group-hover:opacity-100 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200">
+                    <button onClick={(e) => { e.stopPropagation(); setConfirmDel(s); }} className="opacity-0 group-hover:opacity-100 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -298,6 +302,17 @@ export default function SantriPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDel}
+        onOpenChange={(o) => !o && setConfirmDel(null)}
+        title="Hapus Santri"
+        message={`Hapus santri ${confirmDel?.nama}?`}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

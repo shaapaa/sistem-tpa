@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Pencil, Trash2, Search, UserCog, User, UserCheck, Shield } from "lucide-react"
+import { Plus, Pencil, Trash2, Search, UserCog, User, UserCheck, Shield, Eye, EyeOff } from "lucide-react"
 import { formatRole } from "@/lib/format"
 
 interface User {
@@ -26,6 +27,9 @@ export default function UsersPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<User | null>(null)
   const [search, setSearch] = useState("")
+  const [confirmDel, setConfirmDel] = useState<User | null>(null)
+  const [errorMsg, setErrorMsg] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [form, setForm] = useState({
     username: "",
     role: "",
@@ -55,34 +59,54 @@ export default function UsersPage() {
 
   const handleSave = async () => {
     if (!form.username || (!editing && !form.password)) {
-      alert("Username dan password wajib diisi")
+      setErrorMsg("Username dan password wajib diisi")
+      return
+    }
+    if (form.password && form.password.length < 6) {
+      setErrorMsg("Password minimal 6 karakter")
       return
     }
 
     const payload = { username: form.username, role: form.role }
 
     if (editing) {
-      await supabase.from("users").update(payload).eq("id", editing.id)
+      const { error: userErr } = await supabase.from("users").update(payload).eq("id", editing.id)
+      if (userErr) { setErrorMsg(formatAuthError(userErr.message)); return }
       if (form.password) {
-        await supabase.auth.admin.updateUserById(editing.id, { password: form.password })
+        const { error: pwdErr } = await supabase.auth.admin.updateUserById(editing.id, { password: form.password })
+        if (pwdErr) { setErrorMsg(formatAuthError(pwdErr.message)); return }
       }
     } else {
-      const { data: authUser } = await supabase.auth.admin.createUser({
+      const { data: authUser, error: authErr } = await supabase.auth.admin.createUser({
         email: `${form.username}@tpa-baitulyatama.local`,
         password: form.password,
         email_confirm: true,
       })
+      if (authErr) {
+        setErrorMsg(formatAuthError(authErr.message))
+        return
+      }
       if (authUser.user) {
-        await supabase.from("users").insert({ id: authUser.user.id, ...payload })
+        const { error: userInsertErr } = await supabase.from("users").insert({ id: authUser.user.id, ...payload })
+        if (userInsertErr) {
+          await supabase.auth.admin.deleteUser(authUser.user.id)
+          setErrorMsg(userInsertErr.message.includes("duplicate") || userInsertErr.message.includes("unique")
+            ? `Username "${form.username}" sudah digunakan`
+            : formatAuthError(userInsertErr.message))
+          return
+        }
       }
     }
 
+    setShowPassword(false)
     setDialogOpen(false)
     fetchData()
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Hapus user ini?")) return
+  const handleDelete = async () => {
+    if (!confirmDel) return
+    const id = confirmDel.id
+    setConfirmDel(null)
     await supabase.auth.admin.deleteUser(id)
     await supabase.from("users").delete().eq("id", id)
     fetchData()
@@ -164,7 +188,7 @@ export default function UsersPage() {
                           <Pencil className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(u.id)}
+                          onClick={() => setConfirmDel(u)}
                           className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors duration-200"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -202,7 +226,23 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <Label>Password {editing ? "(kosongkan jika tidak diubah)" : ""}</Label>
-              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="h-9" placeholder={editing ? "Biarkan kosong untuk tidak mengubah" : "Password"} />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  className="h-9 pr-10"
+                  placeholder={editing ? "Biarkan kosong untuk tidak mengubah" : "Password"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -211,6 +251,39 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDel}
+        onOpenChange={(o) => !o && setConfirmDel(null)}
+        title="Hapus User"
+        message={`Hapus user ${confirmDel?.username}?`}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={!!errorMsg}
+        onOpenChange={(o) => !o && setErrorMsg("")}
+        title="Perhatian"
+        message={errorMsg}
+        confirmLabel="OK"
+      />
     </div>
   )
+}
+
+function formatAuthError(msg: string): string {
+  const lower = msg.toLowerCase()
+  if (lower.includes("already been registered") || lower.includes("already registered") || lower.includes("duplicate")) {
+    return "Username / email sudah digunakan"
+  }
+  if (lower.includes("invalid") && lower.includes("password")) {
+    return "Password tidak valid (minimal 6 karakter)"
+  }
+  if (lower.includes("not allowed") || lower.includes("forbidden") || lower.includes("unauthorized")) {
+    return "Operasi tidak diizinkan. Periksa kembali username — kemungkinan sudah digunakan oleh akun lain."
+  }
+  return msg
 }
