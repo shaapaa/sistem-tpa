@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Users, BookOpen, BookMarked, Moon, Calendar } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
+import { PageHeader } from "@/components/layout/page-header";
+import { SectionHeader } from "@/components/layout/section-header";
 
 interface SantriData {
   id: string;
@@ -98,11 +100,7 @@ export default function OrangTuaDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Rekap perkembangan {santri?.nama ?? "anak Anda"}</p>
-        </div>
+      <PageHeader eyebrow="Portal orang tua" title="Perkembangan anak" description={`Ringkasan belajar ${santri?.nama ?? "anak Anda"}.`} action={
         <div className="w-48">
           <Label>Periode</Label>
           <Select value={period} onValueChange={(v: string | null) => v && setPeriod(v)} items={[{ label: "Minggu Ini", value: "week" }, { label: "Bulan Ini", value: "month" }, { label: "3 Bulan", value: "quarter" }, { label: "Tahun Ini", value: "year" }]}>
@@ -115,10 +113,10 @@ export default function OrangTuaDashboard() {
             </SelectContent>
           </Select>
         </div>
-      </div>
+      } />
 
       {santri && (
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="surface-panel border-l-4 border-l-primary p-5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-primary/10 p-3 text-primary font-bold text-lg">
               {santri.nama.charAt(0)}
@@ -131,54 +129,56 @@ export default function OrangTuaDashboard() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="card-elevated card-elevated-hover">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+      <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-[1.35fr_1fr_1fr]">
+        <Card className="surface-panel card-elevated-hover">
+          <CardHeader className="flex flex-row items-center justify-between p-4 pb-2 sm:p-6 sm:pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Kehadiran</CardTitle>
             <div className="rounded-lg bg-primary/10 p-2 text-primary"><Users className="h-4 w-4" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold tracking-tight font-tabular">{attendanceRate}%</div>
+          <CardContent className="p-4 pt-1 sm:p-6 sm:pt-1">
+            <div className="text-2xl font-bold tracking-tight font-tabular sm:text-3xl">{attendanceRate}%</div>
             <p className="text-xs text-muted-foreground mt-1">{absensis.filter(a => a.status === "HADIR").length} dari {absensis.length} pertemuan</p>
           </CardContent>
         </Card>
 
-        <Card className="card-elevated card-elevated-hover">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className="surface-panel card-elevated-hover">
+          <CardHeader className="flex flex-row items-center justify-between p-4 pb-2 sm:p-6 sm:pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Bacaan</CardTitle>
             <div className="rounded-lg bg-blue-500/10 p-2 text-blue-600"><BookOpen className="h-4 w-4" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold tracking-tight font-tabular">{bacaanCount}</div>
+          <CardContent className="p-4 pt-1 sm:p-6 sm:pt-1">
+            <div className="text-2xl font-bold tracking-tight font-tabular sm:text-3xl">{bacaanCount}</div>
             <p className="text-xs text-muted-foreground mt-1">catatan perkembangan bacaan</p>
           </CardContent>
         </Card>
 
-        <Card className="card-elevated card-elevated-hover">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className="surface-panel card-elevated-hover">
+          <CardHeader className="flex flex-row items-center justify-between p-4 pb-2 sm:p-6 sm:pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Hafalan</CardTitle>
             <div className="rounded-lg bg-amber-500/10 p-2 text-amber-600"><BookMarked className="h-4 w-4" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold tracking-tight font-tabular">{hafalanCount}</div>
+          <CardContent className="p-4 pt-1 sm:p-6 sm:pt-1">
+            <div className="text-2xl font-bold tracking-tight font-tabular sm:text-3xl">{hafalanCount}</div>
             <p className="text-xs text-muted-foreground mt-1">surah/doa yang dihafal</p>
           </CardContent>
         </Card>
 
-        <Card className="card-elevated card-elevated-hover">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <Card className="surface-panel card-elevated-hover lg:col-span-3">
+          <CardHeader className="flex flex-row items-center justify-between p-4 pb-2 sm:p-6 sm:pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Praktik Sholat</CardTitle>
             <div className="rounded-lg bg-green-500/10 p-2 text-green-600"><Moon className="h-4 w-4" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold tracking-tight font-tabular">{sholatCount}</div>
+          <CardContent className="p-4 pt-1 sm:p-6 sm:pt-1">
+            <div className="text-2xl font-bold tracking-tight font-tabular sm:text-3xl">{sholatCount}</div>
             <p className="text-xs text-muted-foreground mt-1">penilaian praktik sholat</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="card-elevated">
+      <section>
+      <SectionHeader title="Kualitas perkembangan" description="Distribusi penilaian pada periode terpilih." />
+      <div className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border/70 bg-border/60 sm:grid-cols-3">
+        <Card className="rounded-none border-0 bg-card">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Penilaian Baik</CardTitle>
           </CardHeader>
@@ -189,7 +189,7 @@ export default function OrangTuaDashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card className="card-elevated">
+        <Card className="rounded-none border-0 bg-card">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Cukup Baik</CardTitle>
           </CardHeader>
@@ -200,7 +200,7 @@ export default function OrangTuaDashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card className="card-elevated">
+        <Card className="rounded-none border-0 bg-card">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Perlu Perbaikan</CardTitle>
           </CardHeader>
@@ -212,9 +212,10 @@ export default function OrangTuaDashboard() {
           </CardContent>
         </Card>
       </div>
+      </section>
 
       {perkembangans.length > 0 && (
-        <Card className="card-elevated">
+        <Card className="surface-panel">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Riwayat Terbaru</CardTitle>
           </CardHeader>

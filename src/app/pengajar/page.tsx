@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Users, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { formatHari, formatTime } from "@/lib/format";
+import { PageHeader } from "@/components/layout/page-header";
+import { MetricRail } from "@/components/layout/metric-rail";
+import { SectionHeader } from "@/components/layout/section-header";
 
 interface Jadwal {
   id: string;
@@ -69,69 +71,29 @@ export default function PengajarDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard Pengajar</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Jadwal dan jumlah santri Anda</p>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card className="card-elevated card-elevated-hover">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle className="text-sm font-medium text-muted-foreground">Santri Ditangani</CardTitle>
-              <p className="text-xs text-muted-foreground/70">Santri pada kelas Anda</p>
-            </div>
-            <div className="rounded-lg p-2 bg-primary/10 text-primary">
-              <Users className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold tracking-tight font-tabular">{santriCount}</div>
-          </CardContent>
-        </Card>
-        <Card className="card-elevated card-elevated-hover">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle className="text-sm font-medium text-muted-foreground">Jadwal Aktif</CardTitle>
-              <p className="text-xs text-muted-foreground/70">Jadwal mingguan Anda</p>
-            </div>
-            <div className="rounded-lg p-2 bg-primary/10 text-primary">
-              <Calendar className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold tracking-tight font-tabular">{jadwals.length}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-foreground">Jadwal Mengajar</h2>
-          <Link href="/pengajar/absensi" className="group inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors duration-200">
-            Input Absensi
-            <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
-          </Link>
-        </div>
+      <PageHeader eyebrow="Ruang pengajar" title="Hari ini" description="Jadwal dan jumlah santri yang berada dalam tanggung jawab Anda." />
+      <MetricRail items={[{ label: "Santri", value: santriCount, detail: "dalam kelas Anda", href: "/pengajar/perkembangan", tone: "primary" }, { label: "Jadwal aktif", value: jadwals.length, detail: "slot mengajar mingguan", href: "/pengajar/jadwal" }]} />
+      <section>
+        <SectionHeader title="Jadwal mengajar" description="Pilih presensi untuk mulai mencatat pertemuan." actions={<Link href="/pengajar/presensi" className="action-link inline-flex items-center gap-1">Input presensi <ArrowRight className="h-3.5 w-3.5" /></Link>} />
 
         {jadwals.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-8 text-center">
+          <div className="surface-inset mt-4 p-5 text-center sm:p-8">
             <Calendar className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
             <p className="text-sm text-muted-foreground">Belum ada jadwal</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="mt-4 divide-y divide-border/60 border-y border-border/70">
             {jadwals.map((j) => (
-              <div key={j.id} className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 hover:bg-muted/50 transition-colors duration-200">
+              <div key={j.id} className="flex items-center justify-between px-3 py-4 transition-colors hover:bg-primary/[0.025] sm:px-4">
                 <div>
-                  <div className="font-medium text-foreground">{j.jam_mulai.slice(0, 5) === "07:30" ? "Sesi Pagi" : "Sesi Sore"}</div>
-                  <div className="text-sm text-muted-foreground mt-0.5">{formatHari(j.hari)} · <span className="font-tabular">{formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}</span></div>
+                  <div className="text-sm font-medium text-foreground">{j.jam_mulai.slice(0, 5) === "07:30" ? "Sesi Pagi" : "Sesi Sore"}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">{formatHari(j.hari)} · <span className="font-tabular">{formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}</span></div>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

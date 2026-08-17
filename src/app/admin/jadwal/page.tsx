@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Trash2, Clock, Users } from "lucide-react";
 import { formatHari, formatTime } from "@/lib/format";
+import { PageHeader } from "@/components/layout/page-header";
 
 interface Jadwal {
   id: string;
@@ -113,15 +114,9 @@ export default function JadwalPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Jadwal Mengajar</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Atur jadwal mengajar pengajar per hari</p>
-        </div>
-        <Button onClick={() => openAdd()} className="h-9 px-4">
+      <PageHeader eyebrow="Ritme belajar" title="Jadwal mengajar" description="Atur pengajar, hari, dan sesi mengajar." action={<Button onClick={() => openAdd()} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Jadwal
-        </Button>
-      </div>
+        </Button>} />
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">

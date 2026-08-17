@@ -17,10 +17,10 @@ function TabLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
       href={item.href}
       className={cn(
         "flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors duration-200",
-        isActive ? "text-primary" : "text-muted-foreground"
+        isActive ? "bg-[oklch(0.34_0.055_155)] text-[oklch(0.98_0.008_92)]" : "text-[oklch(0.78_0.025_92)]"
       )}
     >
-      <Icon className={cn("h-5 w-5", isActive && "text-primary")} />
+      <Icon className={cn("h-5 w-5", isActive && "text-[oklch(0.82_0.08_92)]")} />
       {item.label}
     </Link>
   )
@@ -41,13 +41,13 @@ export function MobileNav() {
   if (loading) return null
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-stretch border-t border-border bg-card lg:hidden safe-area-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-stretch border-t border-sidebar-border bg-sidebar text-sidebar-foreground lg:hidden safe-area-bottom">
       {navItems.map((item) => (
         <TabLink key={item.href} item={item} isActive={isNavItemActive(pathname, item.href)} />
       ))}
       <button
         onClick={handleLogout}
-        className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-muted-foreground transition-colors duration-200 hover:text-destructive"
+        className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-[oklch(0.72_0.025_92)] transition-colors duration-200 hover:text-sidebar-foreground"
       >
         <LogOut className="h-5 w-5" />
         Keluar

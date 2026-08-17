@@ -12,6 +12,9 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Plus, Pencil, Trash2, Users, Search } from "lucide-react"
 import { formatGender } from "@/lib/format"
+import { PageHeader } from "@/components/layout/page-header"
+import { DatePicker } from "@/components/ui/date-picker"
+import { FilterBar } from "@/components/layout/filter-bar"
 
 interface Santri {
   id: string
@@ -142,34 +145,30 @@ export default function SantriPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Data Santri</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Kelola data santri TPA</p>
-        </div>
-        <Button onClick={openAdd} className="h-9 px-4">
+      <PageHeader eyebrow="Data inti" title="Santri" description="Kelola identitas, sesi belajar, wali, dan informasi pendidikan santri." action={<Button onClick={openAdd} className="h-9 px-4"> 
           <Plus className="mr-2 h-4 w-4" /> Tambah Santri
-        </Button>
-      </div>
+        </Button>} />
 
-      <div className="relative max-w-sm">
+      <FilterBar>
+      <div className="relative w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Cari nama atau kelas..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
       </div>
+      </FilterBar>
 
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => <Card key={i} className="h-32 animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-12 text-center">
+        <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
           <Users className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
           <p className="text-sm text-muted-foreground">Tidak ada santri ditemukan</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-px overflow-hidden rounded-xl border border-border/70 bg-border/50 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((s) => (
-            <Card key={s.id} className="card-elevated card-elevated-hover cursor-pointer group" onClick={() => openEdit(s)}>
+            <Card key={s.id} className="rounded-none border-0 bg-card cursor-pointer group transition-colors hover:bg-primary/[0.025]" onClick={() => openEdit(s)}>
               <CardContent className="pt-4 pb-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary text-sm font-semibold">{s.nama.charAt(0)}</div>
@@ -221,7 +220,7 @@ export default function SantriPage() {
               </div>
               <div className="space-y-2">
                 <Label>Tanggal Lahir</Label>
-                <Input type="date" value={form.tanggal_lahir} onChange={(e) => setForm({ ...form, tanggal_lahir: e.target.value })} className="h-9" />
+                <DatePicker value={form.tanggal_lahir} onChange={(value) => setForm({ ...form, tanggal_lahir: value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

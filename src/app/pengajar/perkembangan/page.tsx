@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, BookOpen, BookMarked, Moon, ArrowLeft, CheckCircle } from "lucide-react";
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 
 interface Santri { id: string; nama: string; group_id: string; }
 interface Group { id: string; nama_group: string; sesi: string | null; }
@@ -250,15 +251,7 @@ export default function PerkembanganPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/pengajar" className="rounded-lg p-2 hover:bg-muted transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Input Perkembangan</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Catat perkembangan bacaan, hafalan, dan praktik sholat santri</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Catatan belajar" title="Input perkembangan" description="Catat bacaan, hafalan, dan praktik sholat santri." backHref="/pengajar" />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
@@ -282,7 +275,7 @@ export default function PerkembanganPage() {
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="max-h-72 overflow-y-auto">
             {filteredSantris.length === 0 ? (
-              <div className="p-8 text-center text-sm text-muted-foreground">
+              <div className="p-5 text-center text-sm text-muted-foreground sm:p-8">
                 Tidak ada santri pada kelas ini
               </div>
             ) : (
@@ -305,10 +298,10 @@ export default function PerkembanganPage() {
 
       {selectedSantri ? (
         <Tabs defaultValue="bacaan" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-10">
-            <TabsTrigger value="bacaan" className="gap-1.5"><BookOpen className="h-3.5 w-3.5" /> Bacaan</TabsTrigger>
-            <TabsTrigger value="hafalan" className="gap-1.5"><BookMarked className="h-3.5 w-3.5" /> Hafalan</TabsTrigger>
-            <TabsTrigger value="sholat" className="gap-1.5"><Moon className="h-3.5 w-3.5" /> Praktik Sholat</TabsTrigger>
+           <TabsList className="grid min-h-12 h-auto w-full grid-cols-3">
+             <TabsTrigger value="bacaan" className="gap-1 px-1 text-xs sm:text-sm"><BookOpen className="h-4 w-4" /> Bacaan</TabsTrigger>
+             <TabsTrigger value="hafalan" className="gap-1 px-1 text-xs sm:text-sm"><BookMarked className="h-4 w-4" /> Hafalan</TabsTrigger>
+             <TabsTrigger value="sholat" className="gap-1 px-1 text-xs sm:text-sm"><Moon className="h-4 w-4" /> Praktik Sholat</TabsTrigger>
           </TabsList>
 
           <TabsContent value="bacaan" className="space-y-4 pt-4">
@@ -462,7 +455,7 @@ export default function PerkembanganPage() {
           </TabsContent>
         </Tabs>
       ) : selectedSesi ? (
-        <div className="rounded-xl border border-dashed border-border p-12 text-center">
+        <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
           <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
           <p className="text-sm text-muted-foreground">Pilih santri untuk mulai input perkembangan</p>
         </div>

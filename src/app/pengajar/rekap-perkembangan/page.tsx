@@ -5,12 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Search, Calendar, BookOpen, BookMarked, Moon } from "lucide-react";
-import Link from "next/link";
+import { Search, Calendar, BookOpen, BookMarked, Moon } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
+import { PageHeader } from "@/components/layout/page-header";
 
 interface Perkembangan {
   id: string;
@@ -125,15 +125,7 @@ export default function RekapPerkembanganPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/pengajar" className="rounded-lg p-2 hover:bg-muted transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Rekap Perkembangan</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Riwayat perkembangan santri yang telah diinput</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Riwayat" title="Rekap perkembangan" description="Timeline bacaan, hafalan, dan praktik santri." backHref="/pengajar" />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2">
@@ -170,7 +162,7 @@ export default function RekapPerkembanganPage() {
         </div>
         <div className="space-y-2">
           <Label>Tanggal</Label>
-          <Input type="date" value={searchDate} onChange={(e) => setSearchDate(e.target.value)} className="h-9" />
+          <DatePicker value={searchDate} onChange={setSearchDate} />
         </div>
       </div>
 
@@ -180,7 +172,7 @@ export default function RekapPerkembanganPage() {
         </CardHeader>
         <CardContent>
           {perkembangans.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center">
+            <div className="rounded-xl border border-dashed border-border p-5 text-center sm:p-8">
               <Search className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
               <p className="text-sm text-muted-foreground">Belum ada data perkembangan</p>
             </div>

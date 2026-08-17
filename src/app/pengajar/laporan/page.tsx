@@ -5,14 +5,15 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, Calendar, BookOpen, BookMarked, Moon } from "lucide-react";
-import Link from "next/link";
+import { Download, Calendar } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
+import { PageHeader } from "@/components/layout/page-header";
+import { DatePicker } from "@/components/ui/date-picker";
+import { createReportPdf } from "@/lib/report-pdf";
 
 interface Perkembangan {
   id: string;
@@ -97,18 +98,7 @@ export default function LaporanPage() {
     fetchPerkembangan();
   }, [user, selectedGroup, selectedSantri, dateFrom, dateTo, santris]);
 
-  const handleExportPDF = () => {
-    const content = generateReportContent();
-    const blob = new Blob([content], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `laporan-perkembangan-${new Date().toISOString().split("T")[0]}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const generateReportContent = () => {
+  const handleExportPDF = async () => {
     const groupedBySantri = perkembangans.reduce((acc, p) => {
       const name = p.santris?.nama ?? "Unknown";
       if (!acc[name]) acc[name] = [];
@@ -116,49 +106,31 @@ export default function LaporanPage() {
       return acc;
     }, {} as Record<string, Perkembangan[]>);
 
-    let html = `
-      <html><head><title>Laporan Perkembangan</title>
-      <style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f5f5f5}</style>
-      </head><body>
-      <h1>Laporan Perkembangan Santri</h1>
-      <p>Tanggal Cetak: ${new Date().toLocaleDateString("id-ID")}</p>
-      ${dateFrom || dateTo ? `<p>Periode: ${dateFrom || "Awal"} - ${dateTo || "Sekarang"}</p>` : ""}
-      <hr/>
-    `;
-
-    for (const [nama, items] of Object.entries(groupedBySantri)) {
-      html += `<h2>${nama}</h2><table><tr><th>Tanggal</th><th>Tipe</th><th>Detail</th><th>Penilaian</th><th>Catatan</th></tr>`;
-      for (const item of items) {
-        const detail = item.tipe_perkembangan === "BACAAN"
-          ? (item.jenis_bacaan === "IQRA" ? `Iqra ${item.iqra_ke} Hal. ${item.halaman_iqra}` : `${item.surah} Juz ${item.juz}`)
-          : item.tipe_perkembangan === "HAFALAN" ? item.nama_surah : item.jenis_sholat;
-        html += `<tr><td>${formatDateShort(item.tanggal)}</td><td>${item.tipe_perkembangan}</td><td>${detail}</td><td>${item.penilaian ?? "-"}</td><td>${item.catatan ?? "-"}</td></tr>`;
-      }
-      html += `</table>`;
-    }
-
-    if (catatanLaporan) {
-      html += `<h2>Catatan Pengajar</h2><p>${catatanLaporan.replace(/\n/g, "<br/>")}</p>`;
-    }
-
-    html += `</body></html>`;
-    return html;
+    await createReportPdf({
+      filename: `laporan-perkembangan-${new Date().toISOString().split("T")[0]}.pdf`,
+      title: "Laporan Perkembangan Santri",
+      metadata: [
+        `Tanggal cetak: ${new Date().toLocaleDateString("id-ID")}`,
+        ...(dateFrom || dateTo ? [`Periode: ${dateFrom || "Awal"} - ${dateTo || "Sekarang"}`] : []),
+      ],
+      tables: Object.entries(groupedBySantri).map(([nama, items]) => ({
+        title: nama,
+        head: ["Tanggal", "Tipe", "Detail", "Penilaian", "Catatan"],
+        body: items.map((item) => [
+          formatDateShort(item.tanggal),
+          item.tipe_perkembangan,
+          item.tipe_perkembangan === "BACAAN" ? (item.jenis_bacaan === "IQRA" ? `Iqra ${item.iqra_ke} Hal. ${item.halaman_iqra}` : `${item.surah} Juz ${item.juz}`) : item.tipe_perkembangan === "HAFALAN" ? item.nama_surah ?? "-" : item.jenis_sholat ?? "-",
+          item.penilaian ?? "-",
+          item.catatan ?? "-",
+        ]),
+      })),
+      notes: catatanLaporan ? [{ title: "Catatan Pengajar", body: catatanLaporan }] : [],
+    });
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/pengajar" className="rounded-lg p-2 hover:bg-muted transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Laporan Perkembangan</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Rekap perkembangan santri yang bisa diunduh</p>
-        </div>
-        <Button onClick={handleExportPDF} className="h-9 px-4" disabled={perkembangans.length === 0}>
-          <Download className="mr-2 h-4 w-4" /> Unduh Laporan
-        </Button>
-      </div>
+      <PageHeader eyebrow="Dokumen" title="Laporan perkembangan" description="Rekap perkembangan santri dengan catatan pengajar." backHref="/pengajar" action={<Button onClick={handleExportPDF} className="h-9 px-4" disabled={perkembangans.length === 0}><Download className="mr-2 h-4 w-4" /> Unduh laporan</Button>} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2">
@@ -183,11 +155,11 @@ export default function LaporanPage() {
         </div>
         <div className="space-y-2">
           <Label>Dari Tanggal</Label>
-          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
+          <DatePicker value={dateFrom} onChange={setDateFrom} />
         </div>
         <div className="space-y-2">
           <Label>Sampai Tanggal</Label>
-          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
+          <DatePicker value={dateTo} onChange={setDateTo} />
         </div>
       </div>
 
@@ -220,7 +192,7 @@ export default function LaporanPage() {
         </CardHeader>
         <CardContent>
           {perkembangans.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center">
+            <div className="rounded-xl border border-dashed border-border p-5 text-center sm:p-8">
               <Calendar className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
               <p className="text-sm text-muted-foreground">Belum ada data untuk dilaporkan</p>
             </div>

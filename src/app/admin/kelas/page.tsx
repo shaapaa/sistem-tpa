@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Pencil, Trash2, Users, BookOpen, Sun, Moon, Calendar } from "lucide-react"
 import { formatSesi, formatTingkat } from "@/lib/format"
+import { PageHeader } from "@/components/layout/page-header"
 
 interface Group {
   id: string
@@ -126,15 +127,9 @@ export default function KelasPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Data Kelas</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Kelola kelas dan penempatan pengajar</p>
-        </div>
-        <Button onClick={openAdd} className="h-9 px-4">
+      <PageHeader eyebrow="Struktur belajar" title="Kelas" description="Kelola sesi, tingkat, dan penempatan pengajar." action={<Button onClick={openAdd} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Kelas
-        </Button>
-      </div>
+        </Button>} />
 
       {loading ? (
         <div className="space-y-4">
@@ -152,7 +147,7 @@ export default function KelasPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {sortedGroups.filter((g) => g.sesi === sesi).length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-border p-8 text-center sm:col-span-2 lg:col-span-3">
+                  <div className="rounded-xl border border-dashed border-border p-5 text-center sm:col-span-2 sm:p-8 lg:col-span-3">
                     <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
                     <p className="text-sm text-muted-foreground">Belum ada kelas sesi {formatSesi(sesi).toLowerCase()}</p>
                   </div>

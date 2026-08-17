@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Calendar, Clock } from "lucide-react";
 import { formatHari, formatTime } from "@/lib/format";
+import { PageHeader } from "@/components/layout/page-header";
 
 interface Jadwal {
   id: string;
@@ -43,22 +44,19 @@ export default function PengajarJadwalPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Jadwal Mengajar</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Jadwal mengajar Anda</p>
-      </div>
+      <PageHeader eyebrow="Ritme mengajar" title="Jadwal Anda" description="Hari, sesi, dan jam mengajar yang ditetapkan admin." />
 
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />)}
         </div>
       ) : sorted.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-12 text-center">
+        <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
           <Calendar className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
           <p className="text-sm text-muted-foreground">Belum ada jadwal</p>
         </div>
       ) : (
-        <Card className="card-elevated overflow-hidden">
+        <Card className="surface-panel overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

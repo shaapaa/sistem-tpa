@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { User, BookOpen, Calendar, Clock, Phone, MapPin, Users, CalendarDays, UserX } from "lucide-react";
 import { formatGender, formatSesi, formatTingkat, formatDate } from "@/lib/format";
+import { PageHeader } from "@/components/layout/page-header";
 
 interface Santri {
   id: string;
@@ -40,7 +41,7 @@ export default function AnakPage() {
 
   if (loading) return <div className="h-32 rounded-lg bg-muted animate-pulse" />;
   if (!santri) return (
-    <div className="rounded-xl border border-dashed border-border p-12 text-center">
+    <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
       <UserX className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
       <p className="text-sm text-muted-foreground">Data anak tidak ditemukan</p>
     </div>
@@ -62,12 +63,9 @@ export default function AnakPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Data Anak</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Detail informasi anak Anda</p>
-      </div>
+      <PageHeader eyebrow="Profil santri" title="Data anak" description="Informasi pendidikan dan kontak yang tersimpan." />
 
-      <Card className="card-elevated overflow-hidden">
+      <Card className="surface-panel overflow-hidden">
         <div className="h-1.5 bg-primary/70" />
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">

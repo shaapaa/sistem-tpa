@@ -5,12 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Users, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
-import Link from "next/link";
+import { Calendar, Users, CheckCircle, XCircle, Clock } from "lucide-react";
 import { formatDateShort, formatStatus, getStatusBadgeVariant } from "@/lib/format";
+import { PageHeader } from "@/components/layout/page-header";
 
 interface Absensi {
   id: string;
@@ -101,19 +101,11 @@ export default function PresensiPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/pengajar" className="rounded-lg p-2 hover:bg-muted transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Rekap Presensi</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Riwayat kehadiran santri berdasarkan periode</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Kehadiran" title="Rekap presensi" description="Riwayat kehadiran santri berdasarkan periode." backHref="/pengajar" />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="card-elevated">
-          <CardContent className="pt-6">
+          <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-primary/10 p-2 text-primary"><Users className="h-4 w-4" /></div>
               <div>
@@ -124,7 +116,7 @@ export default function PresensiPage() {
           </CardContent>
         </Card>
         <Card className="card-elevated">
-          <CardContent className="pt-6">
+          <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-green-500/10 p-2 text-green-600"><CheckCircle className="h-4 w-4" /></div>
               <div>
@@ -135,7 +127,7 @@ export default function PresensiPage() {
           </CardContent>
         </Card>
         <Card className="card-elevated">
-          <CardContent className="pt-6">
+          <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-amber-500/10 p-2 text-amber-600"><Clock className="h-4 w-4" /></div>
               <div>
@@ -146,7 +138,7 @@ export default function PresensiPage() {
           </CardContent>
         </Card>
         <Card className="card-elevated">
-          <CardContent className="pt-6">
+          <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-red-500/10 p-2 text-red-600"><XCircle className="h-4 w-4" /></div>
               <div>
@@ -181,11 +173,11 @@ export default function PresensiPage() {
         </div>
         <div className="space-y-2">
           <Label>Dari Tanggal</Label>
-          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
+          <DatePicker value={dateFrom} onChange={setDateFrom} />
         </div>
         <div className="space-y-2">
           <Label>Sampai Tanggal</Label>
-          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
+          <DatePicker value={dateTo} onChange={setDateTo} />
         </div>
       </div>
 
@@ -195,7 +187,7 @@ export default function PresensiPage() {
         </CardHeader>
         <CardContent>
           {absensis.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center">
+            <div className="rounded-xl border border-dashed border-border p-5 text-center sm:p-8">
               <Calendar className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
               <p className="text-sm text-muted-foreground">Belum ada data presensi</p>
             </div>

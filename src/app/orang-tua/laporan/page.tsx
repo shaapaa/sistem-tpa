@@ -6,9 +6,10 @@ import { useAuth } from "@/lib/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, Calendar, BookOpen, BookMarked, Moon, FileText } from "lucide-react";
-import Link from "next/link";
+import { Download, BookOpen, BookMarked, Moon, FileText } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
+import { PageHeader } from "@/components/layout/page-header";
+import { createReportPdf } from "@/lib/report-pdf";
 
 interface SantriData {
   id: string;
@@ -79,52 +80,24 @@ export default function OrangTuaLaporanPage() {
     fetchData();
   }, [user]);
 
-  const handleExportPDF = () => {
-    const content = generateReportContent();
-    const blob = new Blob([content], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `laporan-${santri?.nama ?? "anak"}-${new Date().toISOString().split("T")[0]}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const generateReportContent = () => {
+  const handleExportPDF = async () => {
     const attendanceRate = absensis.length > 0
       ? Math.round((absensis.filter(a => a.status === "HADIR").length / absensis.length) * 100)
       : 0;
 
-    let html = `
-      <html><head><title>Laporan Perkembangan - ${santri?.nama}</title>
-      <style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f5f5f5}.stat{display:inline-block;margin:10px;padding:15px;border:1px solid #ddd;border-radius:8px}</style>
-      </head><body>
-      <h1>Laporan Perkembangan Santri</h1>
-      <p><strong>Nama:</strong> ${santri?.nama}</p>
-      <p><strong>Kelas:</strong> ${santri?.groups?.nama_group}</p>
-      <p><strong>Tanggal Cetak:</strong> ${new Date().toLocaleDateString("id-ID")}</p>
-      
-      <h2>Ringkasan Kehadiran</h2>
-      <div class="stat"><strong>Tingkat Kehadiran:</strong> ${attendanceRate}%</div>
-      <div class="stat"><strong>Total Pertemuan:</strong> ${absensis.length}</div>
-      <div class="stat"><strong>Hadir:</strong> ${absensis.filter(a => a.status === "HADIR").length}</div>
-      <div class="stat"><strong>Izin/Sakit:</strong> ${absensis.filter(a => a.status === "IZIN" || a.status === "SAKIT").length}</div>
-      <div class="stat"><strong>Alpha:</strong> ${absensis.filter(a => a.status === "ALPHA").length}</div>
-      
-      <h2>Riwayat Perkembangan</h2>
-      <table>
-        <tr><th>Tanggal</th><th>Tipe</th><th>Detail</th><th>Penilaian</th><th>Catatan</th></tr>
-    `;
-
-    for (const item of perkembangans) {
-      const detail = item.tipe_perkembangan === "BACAAN"
-        ? (item.jenis_bacaan === "IQRA" ? `Iqra ${item.iqra_ke} Hal. ${item.halaman_iqra}` : `${item.surah} Juz ${item.juz}`)
-        : item.tipe_perkembangan === "HAFALAN" ? item.nama_surah : item.jenis_sholat;
-      html += `<tr><td>${formatDateShort(item.tanggal)}</td><td>${item.tipe_perkembangan}</td><td>${detail}</td><td>${item.penilaian ?? "-"}</td><td>${item.catatan ?? "-"}</td></tr>`;
-    }
-
-    html += `</table></body></html>`;
-    return html;
+    await createReportPdf({
+      filename: `laporan-${(santri?.nama ?? "anak").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.pdf`,
+      title: "Laporan Perkembangan Santri",
+      metadata: [
+        `Nama: ${santri?.nama ?? "-"}`,
+        `Kelas: ${santri?.groups?.nama_group ?? "-"}`,
+        `Tanggal cetak: ${new Date().toLocaleDateString("id-ID")}`,
+      ],
+      tables: [
+        { title: "Ringkasan Kehadiran", head: ["Indikator", "Nilai"], body: [["Tingkat kehadiran", `${attendanceRate}%`], ["Total pertemuan", String(absensis.length)], ["Hadir", String(absensis.filter(a => a.status === "HADIR").length)], ["Izin/Sakit", String(absensis.filter(a => a.status === "IZIN" || a.status === "SAKIT").length)], ["Alpha", String(absensis.filter(a => a.status === "ALPHA").length)]] },
+        { title: "Riwayat Lengkap Perkembangan", head: ["Tanggal", "Tipe", "Detail", "Penilaian", "Catatan"], body: perkembangans.map((item) => [formatDateShort(item.tanggal), item.tipe_perkembangan, item.tipe_perkembangan === "BACAAN" ? (item.jenis_bacaan === "IQRA" ? `Iqra ${item.iqra_ke} Hal. ${item.halaman_iqra}` : `${item.surah} Juz ${item.juz}`) : item.tipe_perkembangan === "HAFALAN" ? item.nama_surah ?? "-" : item.jenis_sholat ?? "-", item.penilaian ?? "-", item.catatan ?? "-"]) },
+      ],
+    });
   };
 
   const attendanceRate = absensis.length > 0
@@ -133,21 +106,10 @@ export default function OrangTuaLaporanPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/orang-tua" className="rounded-lg p-2 hover:bg-muted transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Laporan Perkembangan</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Rekap lengkap perkembangan {santri?.nama ?? "anak Anda"}</p>
-        </div>
-        <Button onClick={handleExportPDF} className="h-9 px-4" disabled={perkembangans.length === 0}>
-          <Download className="mr-2 h-4 w-4" /> Unduh PDF
-        </Button>
-      </div>
+      <PageHeader eyebrow="Dokumen perkembangan" title="Laporan anak" description={`Rekap lengkap perkembangan ${santri?.nama ?? "anak Anda"}.`} backHref="/orang-tua" action={<Button onClick={handleExportPDF} className="h-9 px-4" disabled={perkembangans.length === 0}><Download className="mr-2 h-4 w-4" /> Unduh PDF</Button>} />
 
       {santri && (
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="surface-panel border-l-4 border-l-primary p-5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-primary/10 p-3 text-primary font-bold text-lg">
               {santri.nama.charAt(0)}
@@ -161,7 +123,7 @@ export default function OrangTuaLaporanPage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="card-elevated">
+        <Card className="surface-panel">
           <CardContent className="pt-6">
             <div className="text-center">
               <div className="text-3xl font-bold font-tabular text-primary">{attendanceRate}%</div>
@@ -169,7 +131,7 @@ export default function OrangTuaLaporanPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="card-elevated">
+        <Card className="surface-panel">
           <CardContent className="pt-6">
             <div className="text-center">
               <div className="text-3xl font-bold font-tabular">{perkembangans.length}</div>
@@ -177,7 +139,7 @@ export default function OrangTuaLaporanPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="card-elevated">
+        <Card className="surface-panel">
           <CardContent className="pt-6">
             <div className="text-center">
               <div className="text-3xl font-bold font-tabular">{absensis.length}</div>
@@ -187,13 +149,13 @@ export default function OrangTuaLaporanPage() {
         </Card>
       </div>
 
-      <Card className="card-elevated">
+      <Card className="surface-panel">
         <CardHeader>
           <CardTitle className="text-sm font-medium">Riwayat Lengkap Perkembangan</CardTitle>
         </CardHeader>
         <CardContent>
           {perkembangans.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center">
+            <div className="rounded-xl border border-dashed border-border p-5 text-center sm:p-8">
               <FileText className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
               <p className="text-sm text-muted-foreground">Belum ada data perkembangan</p>
             </div>

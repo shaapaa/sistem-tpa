@@ -13,6 +13,8 @@ import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Pencil, Trash2, Search, UserCog, User, UserCheck, Shield, Eye, EyeOff } from "lucide-react"
 import { formatRole } from "@/lib/format"
+import { PageHeader } from "@/components/layout/page-header"
+import { FilterBar } from "@/components/layout/filter-bar"
 
 interface User {
   id: string
@@ -125,17 +127,11 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">User Management</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Kelola akun pengguna sistem</p>
-        </div>
-        <Button onClick={openAdd} className="h-9 px-4">
+      <PageHeader eyebrow="Akses sistem" title="Users" description="Kelola akun, peran, dan akses masuk sistem." action={<Button onClick={openAdd} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah User
-        </Button>
-      </div>
+        </Button>} />
 
-      <div className="relative max-w-sm">
+      <FilterBar><div className="relative w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Cari username..."
@@ -144,8 +140,9 @@ export default function UsersPage() {
           className="pl-9 h-9"
         />
       </div>
+      </FilterBar>
 
-      <Card className="card-elevated">
+          <Card className="surface-panel overflow-hidden">
         {loading ? (
           <div className="p-4">
             {Array.from({ length: 5 }).map((_, i) => (
