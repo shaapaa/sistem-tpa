@@ -14,7 +14,7 @@ import { createReportPdf } from "@/lib/report-pdf";
 interface SantriData {
   id: string;
   nama: string;
-  groups?: { nama_group: string };
+  sesi: string | null;
 }
 
 interface Perkembangan {
@@ -52,13 +52,13 @@ export default function OrangTuaLaporanPage() {
 
       const { data: link } = await supabase
         .from("orang_tuas")
-        .select("santri_id, santris(id, nama, groups(nama_group))")
+        .select("santri_id, santris(id, nama, sesi)")
         .eq("user_id", user.id)
         .single();
 
       if (!link?.santris) return;
       const santriData = link.santris as any;
-      setSantri({ id: santriData.id, nama: santriData.nama, groups: santriData.groups });
+      setSantri({ id: santriData.id, nama: santriData.nama, sesi: santriData.sesi });
 
       const { data: perk } = await supabase
         .from("perkembangan_santris")
@@ -90,7 +90,7 @@ export default function OrangTuaLaporanPage() {
       title: "Laporan Perkembangan Santri",
       metadata: [
         `Nama: ${santri?.nama ?? "-"}`,
-        `Kelas: ${santri?.groups?.nama_group ?? "-"}`,
+        `Kelas: ${santri?.sesi === "PAGI" ? "Pagi" : santri?.sesi === "SORE" ? "Sore" : "-"}`,
         `Tanggal cetak: ${new Date().toLocaleDateString("id-ID")}`,
       ],
       tables: [
@@ -116,7 +116,7 @@ export default function OrangTuaLaporanPage() {
             </div>
             <div>
               <h2 className="font-medium text-foreground">{santri.nama}</h2>
-              <p className="text-sm text-muted-foreground">{santri.groups?.nama_group ?? "-"}</p>
+              <p className="text-sm text-muted-foreground">{santri.sesi === "PAGI" ? "Sesi Pagi" : santri.sesi === "SORE" ? "Sesi Sore" : "-"}</p>
             </div>
           </div>
         </div>

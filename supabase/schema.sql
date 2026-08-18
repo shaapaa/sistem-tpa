@@ -35,35 +35,12 @@ create table pengajars (
 );
 
 -- ============================================
--- GROUPS (Class Groups)
--- ============================================
-
-create table groups (
-  id uuid primary key default gen_random_uuid(),
-  nama_group text unique not null,
-  sesi text not null check (sesi in ('PAGI', 'SORE')),
-  tingkat text not null check (tingkat in ('IQRA', 'QURAN')),
-  deskripsi text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
-create table group_pengajars (
-  id uuid primary key default gen_random_uuid(),
-  group_id uuid references groups(id) on delete cascade,
-  pengajar_id uuid references pengajars(id) on delete cascade,
-  created_at timestamptz default now(),
-  unique(group_id, pengajar_id)
-);
-
--- ============================================
 -- SANTRI (Students)
 -- ============================================
 
 create table santris (
   id uuid primary key default gen_random_uuid(),
   user_id uuid unique references users(id) on delete restrict,
-  group_id uuid references groups(id) on delete cascade,
   nama text not null,
   jenis_kelamin text,
   tanggal_lahir date,
@@ -98,7 +75,6 @@ create table orang_tuas (
 
 create table jadwals (
   id uuid primary key default gen_random_uuid(),
-  group_id uuid references groups(id) on delete cascade,
   pengajar_id uuid references pengajars(id) on delete cascade,
   hari text not null check (hari in ('SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU','MINGGU')),
   jam_mulai time not null,
@@ -115,7 +91,6 @@ create table jadwals (
 create table pertemuans (
   id uuid primary key default gen_random_uuid(),
   jadwal_id uuid references jadwals(id) on delete cascade,
-  group_id uuid references groups(id) on delete cascade,
   tanggal date not null,
   tema text,
   catatan text,
@@ -246,10 +221,10 @@ create table perkembangan_santris (
 -- INDEXES
 -- ============================================
 
-create index idx_santris_group on santris(group_id);
-create index idx_pengajars_nama on pengajars(nama);
 create index idx_santris_nama on santris(nama);
-create index idx_jadwals_group on jadwals(group_id);
+create index idx_pengajars_nama on pengajars(nama);
+create index idx_santris_sesi on santris(sesi);
+create index idx_jadwals_pengajar on jadwals(pengajar_id);
 create index idx_jadwals_hari on jadwals(hari);
 create index idx_pertemuans_jadwal on pertemuans(jadwal_id);
 create index idx_pertemuans_group on pertemuans(group_id);
@@ -279,12 +254,11 @@ returns uuid as $$
   select id from pengajars where user_id = auth.uid() limit 1;
 $$ language sql security definer stable;
 
-create or replace function public.pengajar_in_group(g_id uuid)
-returns boolean as $$
-  select exists (
-    select 1 from group_pengajars
-    where pengajar_id = public.pengajar_id() and group_id = g_id
-  );
+create or replace function public.pengajar_sesis()
+returns text[] as $$
+  select coalesce(array_agg(distinct case when jam_mulai < '12:00' then 'PAGI' else 'SORE' end), '{}')
+  from jadwals
+  where pengajar_id = (select id from pengajars where user_id = auth.uid());
 $$ language sql security definer stable;
 
 create or replace function public.anak_id()
@@ -296,8 +270,6 @@ $$ language sql security definer stable;
 alter table users enable row level security;
 alter table pengajars enable row level security;
 alter table santris enable row level security;
-alter table groups enable row level security;
-alter table group_pengajars enable row level security;
 alter table jadwals enable row level security;
 alter table pertemuans enable row level security;
 alter table absensis enable row level security;
@@ -313,8 +285,6 @@ alter table perkembangan_santris enable row level security;
 create policy "Admin users" on users for all using (public.user_role() = 'ADMIN');
 create policy "Admin pengajars" on pengajars for all using (public.user_role() = 'ADMIN');
 create policy "Admin santris" on santris for all using (public.user_role() = 'ADMIN');
-create policy "Admin groups" on groups for all using (public.user_role() = 'ADMIN');
-create policy "Admin group_pengajars" on group_pengajars for all using (public.user_role() = 'ADMIN');
 create policy "Admin jadwals" on jadwals for all using (public.user_role() = 'ADMIN');
 create policy "Admin pertemuans" on pertemuans for all using (public.user_role() = 'ADMIN');
 create policy "Admin absensis" on absensis for all using (public.user_role() = 'ADMIN');
@@ -327,29 +297,26 @@ create policy "Admin orang_tuas" on orang_tuas for all using (public.user_role()
 
 -- PERKEMBANGAN SANTRIS policies
 create policy "Admin perkembangan" on perkembangan_santris for all using (public.user_role() = 'ADMIN');
-create policy "Pengajar write perkembangan" on perkembangan_santris for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
+create policy "Pengajar write perkembangan" on perkembangan_santris for all using (public.user_role() = 'PENGAJAR' and (select sesi from santris where id = student_id) = any(public.pengajar_sesis()));
 create policy "Orang Tua read perkembangan" on perkembangan_santris for select using (public.user_role() = 'ORANG_TUA' and student_id = public.anak_id());
 
--- PENGAJAR: read/write their assigned groups
+-- PENGAJAR: read/write their sesi
 create policy "Pengajar read users" on users for select using (public.user_role() = 'PENGAJAR');
 create policy "Pengajar read pengajars" on pengajars for select using (public.user_role() = 'PENGAJAR');
-create policy "Pengajar read santris" on santris for select using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group(group_id));
-create policy "Pengajar read groups" on groups for select using (public.user_role() = 'PENGAJAR');
-create policy "Pengajar read group_pengajars" on group_pengajars for select using (public.user_role() = 'PENGAJAR');
+create policy "Pengajar read santris" on santris for select using (public.user_role() = 'PENGAJAR' and sesi = any(public.pengajar_sesis()));
 create policy "Pengajar read jadwals" on jadwals for select using (public.user_role() = 'PENGAJAR' and pengajar_id = public.pengajar_id());
 create policy "Pengajar read pertemuans" on pertemuans for select using (public.user_role() = 'PENGAJAR');
-create policy "Pengajar write pertemuans" on pertemuans for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group(group_id)) with check (public.user_role() = 'PENGAJAR' and public.pengajar_in_group(group_id));
-create policy "Pengajar write absensis" on absensis for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
-create policy "Pengajar write progres" on progres_bacaans for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
-create policy "Pengajar write hafalans" on hafalans for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
-create policy "Pengajar write doa" on doa_harians for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
-create policy "Pengajar write sholat" on praktik_sholats for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
-create policy "Pengajar write evaluasi" on evaluasis for all using (public.user_role() = 'PENGAJAR' and public.pengajar_in_group((select group_id from santris where id = student_id)));
+create policy "Pengajar write pertemuans" on pertemuans for all using (public.user_role() = 'PENGAJAR' and jadwal_id in (select id from jadwals where pengajar_id = public.pengajar_id())) with check (public.user_role() = 'PENGAJAR' and jadwal_id in (select id from jadwals where pengajar_id = public.pengajar_id()));
+create policy "Pengajar write absensis" on absensis for all using (public.user_role() = 'PENGAJAR' and (select sesi from santris where id = student_id) = any(public.pengajar_sesis()));
+create policy "Pengajar write progres" on progres_bacaans for all using (public.user_role() = 'PENGAJAR' and (select sesi from santris where id = student_id) = any(public.pengajar_sesis()));
+create policy "Pengajar write hafalans" on hafalans for all using (public.user_role() = 'PENGAJAR' and (select sesi from santris where id = student_id) = any(public.pengajar_sesis()));
+create policy "Pengajar write doa" on doa_harians for all using (public.user_role() = 'PENGAJAR' and (select sesi from santris where id = student_id) = any(public.pengajar_sesis()));
+create policy "Pengajar write sholat" on praktik_sholats for all using (public.user_role() = 'PENGAJAR' and (select sesi from santris where id = student_id) = any(public.pengajar_sesis()));
+create policy "Pengajar write evaluasi" on evaluasis for all using (public.user_role() = 'PENGAJAR' and (select sesi from santris where id = student_id) = any(public.pengajar_sesis()));
 
 -- ORANG_TUA: read-only their linked child
 create policy "Orang Tua read users" on users for select using (public.user_role() = 'ORANG_TUA');
 create policy "Orang Tua read santris" on santris for select using (public.user_role() = 'ORANG_TUA' and id = public.anak_id());
-create policy "Orang Tua read groups" on groups for select using (public.user_role() = 'ORANG_TUA' and id = (select group_id from santris where id = public.anak_id()));
 create policy "Orang Tua read absensis" on absensis for select using (public.user_role() = 'ORANG_TUA' and student_id = public.anak_id());
 create policy "Orang Tua read progres" on progres_bacaans for select using (public.user_role() = 'ORANG_TUA' and student_id = public.anak_id());
 create policy "Orang Tua read hafalans" on hafalans for select using (public.user_role() = 'ORANG_TUA' and student_id = public.anak_id());

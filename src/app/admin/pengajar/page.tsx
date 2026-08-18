@@ -42,6 +42,19 @@ export default function PengajarPage() {
   })
   const supabase = createClient()
 
+  const adminAuth = async (action: string, data?: Record<string, unknown>) => {
+    const isDelete = action === "delete"
+    const url = isDelete && data?.id ? `/api/admin/auth?id=${encodeURIComponent(String(data.id))}` : "/api/admin/auth"
+    const res = await fetch(url, {
+      method: isDelete ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...data }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(json.message || "Operasi gagal")
+    return json
+  }
+
   const fetchData = async () => {
     const { data } = await supabase
       .from("pengajars")
@@ -106,42 +119,42 @@ export default function PengajarPage() {
         const { error: userErr } = await supabase.from("users").update({ username: form.username }).eq("id", editing.users.id)
         if (userErr) { setErrorMsg(userErr.message); setSaving(false); return }
         if (form.password) {
-          const { error: pwdErr } = await supabase.auth.admin.updateUserById(editing.users.id, { password: form.password })
-          if (pwdErr) { setErrorMsg(formatAuthError(pwdErr.message)); setSaving(false); return }
+          try {
+            await adminAuth("update", { id: editing.users.id, password: form.password })
+          } catch (err) {
+            setErrorMsg((err as Error).message)
+            setSaving(false)
+            return
+          }
         }
       }
     } else {
       const { data: newPengajar, error: pengajarErr } = await supabase.from("pengajars").insert(payload).select().single()
       if (pengajarErr) { setErrorMsg(pengajarErr.message); setSaving(false); return }
-      if (newPengajar) {
-        const { data: authUser, error: authErr } = await supabase.auth.admin.createUser({
+      let authId: string | null = null
+      try {
+        const created = await adminAuth("create", {
           email: `${form.username}@tpa-baitulyatama.local`,
           password: form.password,
-          email_confirm: true,
         })
-        if (authErr) {
-          await supabase.from("pengajars").delete().eq("id", newPengajar.id)
-          setErrorMsg(formatAuthError(authErr.message))
-          setSaving(false)
-          return
-        }
-        if (authUser.user) {
-          const { error: userInsertErr } = await supabase.from("users").insert({
-            id: authUser.user.id,
-            username: form.username,
-            role: "PENGAJAR",
-          })
-          if (userInsertErr) {
-            await supabase.auth.admin.deleteUser(authUser.user.id)
-            await supabase.from("pengajars").delete().eq("id", newPengajar.id)
-            setErrorMsg(userInsertErr.message.includes("duplicate") || userInsertErr.message.includes("unique")
-              ? `Username "${form.username}" sudah digunakan`
-              : userInsertErr.message)
-            setSaving(false)
-            return
-          }
-          await supabase.from("pengajars").update({ user_id: authUser.user.id }).eq("id", newPengajar.id)
-        }
+        authId = created.id
+        const { error: userInsertErr } = await supabase.from("users").insert({
+          id: authId,
+          username: form.username,
+          role: "PENGAJAR",
+        })
+        if (userInsertErr) throw userInsertErr
+        const { error: linkErr } = await supabase.from("pengajars").update({ user_id: authId }).eq("id", newPengajar.id)
+        if (linkErr) throw linkErr
+      } catch (err) {
+        if (authId) await adminAuth("delete", { id: authId })
+        await supabase.from("pengajars").delete().eq("id", newPengajar.id)
+        const message = (err as Error).message ?? ""
+        setErrorMsg(message.includes("duplicate") || message.includes("unique")
+          ? `Username "${form.username}" sudah digunakan`
+          : message || "Gagal membuat akun pengajar")
+        setSaving(false)
+        return
       }
     }
 
@@ -155,12 +168,16 @@ export default function PengajarPage() {
     const p = confirmDel
     setConfirmDel(null)
 
-    if (p.users?.id) {
-      await supabase.auth.admin.deleteUser(p.users.id)
-      await supabase.from("users").delete().eq("id", p.users.id)
-    }
-
     await supabase.from("pengajars").delete().eq("id", p.id)
+
+    if (p.users?.id) {
+      await supabase.from("users").delete().eq("id", p.users.id)
+      try {
+        await adminAuth("delete", { id: p.users.id })
+      } catch (err) {
+        setErrorMsg((err as Error).message)
+      }
+    }
     fetchData()
   }
 
@@ -315,18 +332,4 @@ export default function PengajarPage() {
       />
     </div>
   )
-}
-
-function formatAuthError(msg: string): string {
-  const lower = msg.toLowerCase()
-  if (lower.includes("already been registered") || lower.includes("already registered") || lower.includes("duplicate")) {
-    return "Username / email sudah digunakan"
-  }
-  if (lower.includes("invalid") && lower.includes("password")) {
-    return "Password tidak valid (minimal 6 karakter)"
-  }
-  if (lower.includes("not allowed") || lower.includes("forbidden") || lower.includes("unauthorized")) {
-    return "Operasi tidak diizinkan. Periksa kembali username — kemungkinan sudah digunakan oleh akun lain."
-  }
-  return msg
 }

@@ -17,10 +17,6 @@ interface Jadwal {
   jam_selesai: string;
 }
 
-interface PengajarData {
-  id: string;
-}
-
 export default function PengajarDashboard() {
   const { user } = useAuth();
   const [jadwals, setJadwals] = useState<Jadwal[]>([]);
@@ -40,14 +36,6 @@ export default function PengajarDashboard() {
 
       if (!pengajar) return;
 
-      // Get assigned groups
-      const { data: groupPengajars } = await supabase
-        .from("group_pengajars")
-        .select("group_id")
-        .eq("pengajar_id", pengajar.id);
-
-      const groupIds = groupPengajars?.map((gp) => gp.group_id) ?? [];
-
       // Get jadwals by pengajar
       const { data: jadwalData } = await supabase
         .from("jadwals")
@@ -57,11 +45,15 @@ export default function PengajarDashboard() {
 
       setJadwals(jadwalData ?? []);
 
-      // Get santri count
+      // Determine sesi(s) taught from jadwal, then count santri
+      const sesis = (jadwalData ?? []).map((j: { jam_mulai: string }) => j.jam_mulai.slice(0, 5) === "07:30" ? "PAGI" : "SORE");
+      const uniqueSesis = [...new Set(sesis)];
+      if (uniqueSesis.length === 0) { setSantriCount(0); return; }
+
       const { count } = await supabase
         .from("santris")
         .select("id", { count: "exact", head: true })
-        .in("group_id", groupIds);
+        .in("sesi", uniqueSesis);
 
       setSantriCount(count ?? 0);
     };
@@ -72,7 +64,7 @@ export default function PengajarDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Ruang pengajar" title="Hari ini" description="Jadwal dan jumlah santri yang berada dalam tanggung jawab Anda." />
-      <MetricRail items={[{ label: "Santri", value: santriCount, detail: "dalam kelas Anda", href: "/pengajar/perkembangan", tone: "primary" }, { label: "Jadwal aktif", value: jadwals.length, detail: "slot mengajar mingguan", href: "/pengajar/jadwal" }]} />
+      <MetricRail items={[{ label: "Santri", value: santriCount, detail: "dalam sesi Anda", href: "/pengajar/perkembangan", tone: "primary" }, { label: "Jadwal aktif", value: jadwals.length, detail: "slot mengajar mingguan", href: "/pengajar/jadwal" }]} />
       <section>
         <SectionHeader title="Jadwal mengajar" description="Pilih presensi untuk mulai mencatat pertemuan." actions={<Link href="/pengajar/presensi" className="action-link inline-flex items-center gap-1">Input presensi <ArrowRight className="h-3.5 w-3.5" /></Link>} />
 

@@ -30,39 +30,26 @@ interface Perkembangan {
 }
 
 interface Santri { id: string; nama: string; }
-interface Group { id: string; nama_group: string; }
 
 export default function RekapPerkembanganPage() {
   const { user } = useAuth();
   const [perkembangans, setPerkembangans] = useState<Perkembangan[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
   const [santris, setSantris] = useState<Santri[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState("");
+  const [selectedSesi, setSelectedSesi] = useState("");
   const [selectedSantri, setSelectedSantri] = useState("");
   const [filterTipe, setFilterTipe] = useState("ALL");
   const [searchDate, setSearchDate] = useState("");
   const supabase = createClient();
 
   useEffect(() => {
-    const fetchGroups = async () => {
-      if (!user) return;
-      const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
-      if (!pengajar) return;
-      const { data: gp } = await supabase.from("group_pengajars").select("group_id, groups(id, nama_group)").eq("pengajar_id", pengajar.id);
-      setGroups(gp?.map((g: any) => g.groups).filter(Boolean) ?? []);
-    };
-    fetchGroups();
-  }, [user]);
-
-  useEffect(() => {
     const fetchSantris = async () => {
-      if (!selectedGroup) { setSantris([]); return; }
-      const { data } = await supabase.from("santris").select("id, nama").eq("group_id", selectedGroup).order("nama");
+      if (!selectedSesi) { setSantris([]); return; }
+      const { data } = await supabase.from("santris").select("id, nama").eq("sesi", selectedSesi).order("nama");
       setSantris(data ?? []);
       setSelectedSantri("");
     };
     fetchSantris();
-  }, [selectedGroup]);
+  }, [selectedSesi]);
 
   useEffect(() => {
     const fetchPerkembangan = async () => {
@@ -78,7 +65,7 @@ export default function RekapPerkembanganPage() {
 
       if (selectedSantri) {
         query = query.eq("student_id", selectedSantri);
-      } else if (selectedGroup) {
+      } else if (selectedSesi) {
         const santriIds = santris.map(s => s.id);
         if (santriIds.length > 0) {
           query = query.in("student_id", santriIds);
@@ -97,7 +84,7 @@ export default function RekapPerkembanganPage() {
       setPerkembangans(data ?? []);
     };
     fetchPerkembangan();
-  }, [user, selectedGroup, selectedSantri, filterTipe, searchDate, santris]);
+  }, [user, selectedSesi, selectedSantri, filterTipe, searchDate, santris]);
 
   const getTipeIcon = (tipe: string) => {
     switch (tipe) {
@@ -129,18 +116,19 @@ export default function RekapPerkembanganPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2">
-          <Label>Kelas</Label>
-          <Select value={selectedGroup} onValueChange={(v: string | null) => setSelectedGroup(v ?? "")} items={groups.map((g) => ({ label: g.nama_group, value: g.id }))}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Semua kelas" /></SelectTrigger>
+          <Label>Sesi</Label>
+          <Select value={selectedSesi} onValueChange={(v: string | null) => setSelectedSesi(v ?? "")} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="Semua sesi" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Semua Kelas</SelectItem>
-              {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.nama_group}</SelectItem>)}
+              <SelectItem value="ALL">Semua Sesi</SelectItem>
+              <SelectItem value="PAGI">Pagi</SelectItem>
+              <SelectItem value="SORE">Sore</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
           <Label>Santri</Label>
-          <Select value={selectedSantri} onValueChange={(v: string | null) => setSelectedSantri(v ?? "")} disabled={!selectedGroup} items={santris.map((s) => ({ label: s.nama, value: s.id }))}>
+          <Select value={selectedSantri} onValueChange={(v: string | null) => setSelectedSantri(v ?? "")} disabled={!selectedSesi} items={santris.map((s) => ({ label: s.nama, value: s.id }))}>
             <SelectTrigger className="h-9"><SelectValue placeholder="Semua santri" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Semua Santri</SelectItem>

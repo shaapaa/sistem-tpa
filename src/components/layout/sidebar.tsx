@@ -44,7 +44,7 @@ function Logo() {
       <img src="/logo-mark.svg" alt="Logo TPA Baitul Yatama" className="h-10 w-10 rounded-md" />
       <div className="flex flex-col min-w-0">
         <span className="text-sm font-semibold text-[oklch(0.98_0.008_92)] truncate">Baitul Yatama</span>
-        <span className="text-xs text-[oklch(0.72_0.025_92)] truncate">Monitoring System</span>
+        <span className="text-xs text-[oklch(0.72_0.025_92)] truncate">Sistem Monitoring Santri</span>
       </div>
     </div>
   )

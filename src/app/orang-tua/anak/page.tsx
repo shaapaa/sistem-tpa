@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { User, BookOpen, Calendar, Clock, Phone, MapPin, Users, CalendarDays, UserX } from "lucide-react";
+import { User, Calendar, Clock, Phone, MapPin, Users, CalendarDays, UserX } from "lucide-react";
 import { formatGender, formatSesi, formatTingkat, formatDate } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -18,7 +18,8 @@ interface Santri {
   nama_ayah: string | null;
   nama_ibu: string | null;
   no_hp_wali: string | null;
-  groups?: { nama_group: string; sesi: string; tingkat: string };
+  sesi: string | null;
+  keterangan: string | null;
 }
 
 export default function AnakPage() {
@@ -32,7 +33,7 @@ export default function AnakPage() {
       if (!user) return;
       const { data: orangTua } = await supabase.from("orang_tuas").select("santri_id").eq("user_id", user.id).single();
       if (!orangTua) { setLoading(false); return; }
-      const { data } = await supabase.from("santris").select("*, groups(nama_group, sesi, tingkat)").eq("id", orangTua.santri_id).single();
+      const { data } = await supabase.from("santris").select("*").eq("id", orangTua.santri_id).single();
       setSantri(data);
       setLoading(false);
     };
@@ -48,9 +49,8 @@ export default function AnakPage() {
   );
 
   const schoolInfo = [
-    { label: "Kelas", value: santri.groups?.nama_group ?? "-", icon: BookOpen },
-    { label: "Sesi", value: formatSesi(santri.groups?.sesi ?? ""), icon: Clock },
-    { label: "Tingkat", value: formatTingkat(santri.groups?.tingkat ?? ""), icon: CalendarDays },
+    { label: "Sesi", value: formatSesi(santri.sesi ?? ""), icon: Clock },
+    { label: "Jenis Bacaan", value: formatTingkat(santri.keterangan ?? ""), icon: CalendarDays },
     { label: "Jenis Kelamin", value: formatGender(santri.jenis_kelamin), icon: User },
   ];
 

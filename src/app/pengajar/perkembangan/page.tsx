@@ -14,8 +14,7 @@ import { Save, BookOpen, BookMarked, Moon, ArrowLeft, CheckCircle } from "lucide
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 
-interface Santri { id: string; nama: string; group_id: string; }
-interface Group { id: string; nama_group: string; sesi: string | null; }
+interface Santri { id: string; nama: string; sesi: string | null }
 
 const IQRA_OPTIONS = [1, 2, 3, 4, 5, 6];
 const JUZ_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1);
@@ -53,7 +52,6 @@ const PENILAIAN_OPTIONS = [
 
 export default function PerkembanganPage() {
   const { user } = useAuth();
-  const [groups, setGroups] = useState<Group[]>([]);
   const [selectedSesi, setSelectedSesi] = useState("");
   const [santris, setSantris] = useState<Santri[]>([]);
   const [selectedSantri, setSelectedSantri] = useState("");
@@ -76,33 +74,19 @@ export default function PerkembanganPage() {
   const [sholatForm, setSholatForm] = useState({ jenis_sholat: "Subuh", penilaian: "BAIK", catatan: "" });
 
   useEffect(() => {
-    const fetchGroups = async () => {
-      if (!user) return;
-      const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
-      if (!pengajar) return;
-      const { data: gp } = await supabase.from("group_pengajars").select("group_id, groups(id, nama_group, sesi)").eq("pengajar_id", pengajar.id);
-      setGroups(gp?.map((g: any) => g.groups).filter(Boolean) ?? []);
-    };
-    fetchGroups();
-  }, [user]);
-
-  useEffect(() => {
     const fetchSantris = async () => {
       if (!selectedSesi) { setSantris([]); return; }
-      const groupIds = groups.map((g) => g.id);
-      if (groupIds.length === 0) { setSantris([]); return; }
       const { data } = await supabase
         .from("santris")
-        .select("id, nama, group_id")
+        .select("id, nama, sesi")
         .eq("sesi", selectedSesi)
-        .in("group_id", groupIds)
         .order("nama");
       setSantris(data ?? []);
       setSelectedSantri("");
       setSearch("");
     };
     fetchSantris();
-  }, [selectedSesi, groups]);
+  }, [selectedSesi]);
 
   const filteredSantris = santris.filter((s) =>
     s.nama.toLowerCase().includes(search.toLowerCase())
@@ -174,7 +158,7 @@ export default function PerkembanganPage() {
             if (!pertemuan) {
               const { data: newPertemuan } = await supabase
                 .from("pertemuans")
-                .insert({ jadwal_id: jadwal.id, group_id: santri.group_id, tanggal: today, status: "SELESAI", created_by: pengajar.id })
+                .insert({ jadwal_id: jadwal.id, tanggal: today, status: "SELESAI", created_by: pengajar.id })
                 .select("id")
                 .single();
               pertemuan = newPertemuan;
@@ -255,15 +239,15 @@ export default function PerkembanganPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Pilih Kelas (Sesi)</Label>
+          <Label>Sesi Belajar</Label>
           <Select value={selectedSesi} onValueChange={(v: string | null) => setSelectedSesi(v ?? "")} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelas pagi/sore" /></SelectTrigger>
+            <SelectTrigger className="h-9"><SelectValue placeholder="Pilih sesi pagi/sore" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="PAGI">Pagi</SelectItem>
               <SelectItem value="SORE">Sore</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">Semua santri pada kelas {selectedSesi === "PAGI" ? "pagi" : selectedSesi === "SORE" ? "sore" : "terpilih"} akan muncul</p>
+          <p className="text-xs text-muted-foreground">Semua santri pada sesi {selectedSesi === "PAGI" ? "pagi" : selectedSesi === "SORE" ? "sore" : "terpilih"} akan muncul</p>
         </div>
         <div className="space-y-2">
           <Label>Santri ({santris.length})</Label>
@@ -276,7 +260,7 @@ export default function PerkembanganPage() {
           <div className="max-h-72 overflow-y-auto">
             {filteredSantris.length === 0 ? (
               <div className="p-5 text-center text-sm text-muted-foreground sm:p-8">
-                Tidak ada santri pada kelas ini
+                Tidak ada santri pada sesi ini
               </div>
             ) : (
               filteredSantris.map((s) => (

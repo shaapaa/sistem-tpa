@@ -8,7 +8,7 @@ import { MetricRail } from "@/components/layout/metric-rail"
 import { SectionHeader } from "@/components/layout/section-header"
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts"
 
-interface Stats { santri: number; pengajar: number; kelas: number; jadwal: number; hadir: number; izin: number; sakit: number; alpha: number }
+interface Stats { santri: number; pengajar: number; jadwal: number; hadir: number; izin: number; sakit: number; alpha: number }
 const COLORS = ["#376b59", "#b58b4b", "#b85b4b", "#768078"]
 
 function renderAttendanceLabel({ name, value, x, y, textAnchor, viewBox }: {
@@ -24,22 +24,21 @@ function renderAttendanceLabel({ name, value, x, y, textAnchor, viewBox }: {
 }
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<Stats>({ santri: 0, pengajar: 0, kelas: 0, jadwal: 0, hadir: 0, izin: 0, sakit: 0, alpha: 0 })
+  const [stats, setStats] = useState<Stats>({ santri: 0, pengajar: 0, jadwal: 0, hadir: 0, izin: 0, sakit: 0, alpha: 0 })
   const [attendanceData, setAttendanceData] = useState<{ name: string; value: number }[]>([])
   const supabase = createClient()
 
   useEffect(() => {
     const fetchStats = async () => {
-      const [santri, pengajar, kelas, jadwal, absensi] = await Promise.all([
+      const [santri, pengajar, jadwal, absensi] = await Promise.all([
         supabase.from("santris").select("id", { count: "exact", head: true }),
         supabase.from("pengajars").select("id", { count: "exact", head: true }),
-        supabase.from("groups").select("id", { count: "exact", head: true }),
         supabase.from("jadwals").select("id", { count: "exact", head: true }),
         supabase.from("absensis").select("status"),
       ])
       const rows = absensi.data ?? []
       const next = {
-        santri: santri.count ?? 0, pengajar: pengajar.count ?? 0, kelas: kelas.count ?? 0, jadwal: jadwal.count ?? 0,
+        santri: santri.count ?? 0, pengajar: pengajar.count ?? 0, jadwal: jadwal.count ?? 0,
         hadir: rows.filter((a) => a.status === "HADIR").length,
         izin: rows.filter((a) => a.status === "IZIN").length,
         sakit: rows.filter((a) => a.status === "SAKIT").length,
@@ -56,11 +55,10 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Operasional TPA" title="Ringkasan hari ini" description="Data utama Baitul Yatama dalam satu pandangan." />
+      <PageHeader eyebrow="TPA Baitul Yatama" title="Ringkasan hari ini" description="Data utama Baitul Yatama dalam satu pandangan." />
       <MetricRail items={[
         { label: "Santri", value: stats.santri, detail: "santri aktif", href: "/admin/santri", tone: "primary" },
         { label: "Pengajar", value: stats.pengajar, detail: "pengajar terdaftar", href: "/admin/pengajar" },
-        { label: "Kelas", value: stats.kelas, detail: "kelas berjalan", href: "/admin/kelas" },
         { label: "Jadwal", value: stats.jadwal, detail: "jadwal terisi", href: "/admin/jadwal" },
       ]} />
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">

@@ -21,7 +21,6 @@ interface Santri {
   nama: string
   jenis_kelamin: string | null
   tanggal_lahir: string | null
-  group_id: string
   nama_ayah: string | null
   nama_ibu: string | null
   no_hp_wali: string | null
@@ -31,18 +30,10 @@ interface Santri {
   keterangan: string | null
   pendidikan_saat_ini: string | null
   sesi: string | null
-  groups?: { nama_group: string }
-}
-
-interface Group {
-  id: string
-  nama_group: string
-  sesi: string | null
 }
 
 export default function SantriPage() {
   const [santris, setSantris] = useState<Santri[]>([])
-  const [groups, setGroups] = useState<Group[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Santri | null>(null)
@@ -52,7 +43,6 @@ export default function SantriPage() {
     nama: "",
     jenis_kelamin: "",
     tanggal_lahir: "",
-    group_id: "",
     nama_ayah: "",
     nama_ibu: "",
     no_hp_wali: "",
@@ -66,12 +56,8 @@ export default function SantriPage() {
   const supabase = createClient()
 
   const fetchData = async () => {
-    const [santriRes, groupRes] = await Promise.all([
-      supabase.from("santris").select("*, groups(nama_group, sesi)").order("nama"),
-      supabase.from("groups").select("id, nama_group, sesi").order("nama_group"),
-    ])
-    setSantris(santriRes.data ?? [])
-    setGroups(groupRes.data ?? [])
+    const { data } = await supabase.from("santris").select("*").order("nama")
+    setSantris(data ?? [])
     setLoading(false)
   }
 
@@ -79,7 +65,7 @@ export default function SantriPage() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ nama: "", jenis_kelamin: "", tanggal_lahir: "", group_id: "", nama_ayah: "", nama_ibu: "", no_hp_wali: "", pekerjaan_ayah: "", pekerjaan_ibu: "", iuran: "", keterangan: "", pendidikan_saat_ini: "", sesi: "" })
+    setForm({ nama: "", jenis_kelamin: "", tanggal_lahir: "", nama_ayah: "", nama_ibu: "", no_hp_wali: "", pekerjaan_ayah: "", pekerjaan_ibu: "", iuran: "", keterangan: "", pendidikan_saat_ini: "", sesi: "" })
     setDialogOpen(true)
   }
 
@@ -89,7 +75,6 @@ export default function SantriPage() {
       nama: s.nama,
       jenis_kelamin: s.jenis_kelamin ?? "",
       tanggal_lahir: s.tanggal_lahir ?? "",
-      group_id: s.group_id,
       nama_ayah: s.nama_ayah ?? "",
       nama_ibu: s.nama_ibu ?? "",
       no_hp_wali: s.no_hp_wali ?? "",
@@ -108,7 +93,6 @@ export default function SantriPage() {
       nama: form.nama,
       jenis_kelamin: form.jenis_kelamin || null,
       tanggal_lahir: form.tanggal_lahir || null,
-      group_id: form.group_id,
       nama_ayah: form.nama_ayah || null,
       nama_ibu: form.nama_ibu || null,
       no_hp_wali: form.no_hp_wali || null,
@@ -140,7 +124,7 @@ export default function SantriPage() {
 
   const filtered = santris.filter((s) =>
     s.nama.toLowerCase().includes(search.toLowerCase()) ||
-    s.groups?.nama_group?.toLowerCase().includes(search.toLowerCase())
+    (s.sesi ?? "").toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -152,7 +136,7 @@ export default function SantriPage() {
       <FilterBar>
       <div className="relative w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Cari nama atau kelas..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+        <Input placeholder="Cari nama santri..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
       </div>
       </FilterBar>
 
@@ -183,7 +167,6 @@ export default function SantriPage() {
                 </div>
                 <h3 className="font-semibold text-foreground mb-1">{s.nama}</h3>
                 <div className="flex flex-wrap gap-1.5 mb-2">
-                  <Badge variant="outline" className="text-[10px]">{s.groups?.nama_group ?? "-"}</Badge>
                   <Badge variant="secondary" className="text-[10px]">{s.sesi === "PAGI" ? "Pagi" : s.sesi === "SORE" ? "Sore" : "-"}</Badge>
                   <Badge variant="secondary" className="text-[10px]">{formatGender(s.jenis_kelamin)}</Badge>
                   {s.keterangan && <Badge variant="secondary" className="text-[10px]">{s.keterangan}</Badge>}
@@ -225,21 +208,12 @@ export default function SantriPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Kelas (Pagi/Sore)</Label>
-                <Select value={form.sesi} onValueChange={(v: string | null) => { const sesi = v ?? ""; setForm({ ...form, sesi, group_id: "" }) }} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
+                <Label>Sesi Belajar</Label>
+                <Select value={form.sesi} onValueChange={(v: string | null) => setForm({ ...form, sesi: v ?? "" })} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Pilih sesi" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PAGI">Pagi</SelectItem>
                     <SelectItem value="SORE">Sore</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Kelas (Detail)</Label>
-                <Select value={form.group_id} onValueChange={(v: string | null) => v && setForm({ ...form, group_id: v })} disabled={!form.sesi} items={groups.filter((g) => g.sesi === form.sesi || !form.sesi).map((g) => ({ label: g.nama_group, value: g.id }))}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>
-                  <SelectContent>
-                    {groups.filter((g) => g.sesi === form.sesi || !form.sesi).map((g) => <SelectItem key={g.id} value={g.id}>{g.nama_group}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

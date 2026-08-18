@@ -11,7 +11,6 @@ export const adminNav: NavItem[] = [
   { label: "Dashboard", href: "/admin", iconName: "LayoutDashboard" },
   { label: "Santri", href: "/admin/santri", iconName: "Users" },
   { label: "Pengajar", href: "/admin/pengajar", iconName: "GraduationCap" },
-  { label: "Kelas", href: "/admin/kelas", iconName: "BookOpen" },
   { label: "Jadwal", href: "/admin/jadwal", iconName: "Calendar" },
   { label: "Users", href: "/admin/users", iconName: "UserCog" },
 ];

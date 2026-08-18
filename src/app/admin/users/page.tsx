@@ -21,10 +21,17 @@ interface User {
   username: string
   role: string
   created_at: string
+  orang_tuas?: { santri_id: string; santris?: { nama: string } }
+}
+
+function normalizeUsername(nama: string): string {
+  return nama.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "")
 }
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
+  const [santris, setSantris] = useState<{ id: string; nama: string }[]>([])
+  const [linkedSantriIds, setLinkedSantriIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<User | null>(null)
@@ -36,12 +43,32 @@ export default function UsersPage() {
     username: "",
     role: "",
     password: "",
+    santri_id: "",
   })
   const supabase = createClient()
 
+  const adminAuth = async (action: string, data?: Record<string, unknown>) => {
+    const isDelete = action === "delete"
+    const url = isDelete && data?.id ? `/api/admin/auth?id=${encodeURIComponent(String(data.id))}` : "/api/admin/auth"
+    const res = await fetch(url, {
+      method: isDelete ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...data }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(json.message || "Operasi gagal")
+    return json
+  }
+
   const fetchData = async () => {
-    const { data } = await supabase.from("users").select("*").order("created_at", { ascending: false })
-    setUsers(data ?? [])
+    const [usersRes, santriRes, linkedRes] = await Promise.all([
+      supabase.from("users").select("*, orang_tuas(santri_id, santris(nama))").order("created_at", { ascending: false }),
+      supabase.from("santris").select("id, nama").order("nama"),
+      supabase.from("orang_tuas").select("santri_id"),
+    ])
+    setUsers(usersRes.data ?? [])
+    setSantris(santriRes.data ?? [])
+    setLinkedSantriIds((linkedRes.data ?? []).map((l) => l.santri_id))
     setLoading(false)
   }
 
@@ -49,13 +76,13 @@ export default function UsersPage() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ username: "", role: "PENGAJAR", password: "" })
+    setForm({ username: "", role: "PENGAJAR", password: "", santri_id: "" })
     setDialogOpen(true)
   }
 
   const openEdit = (u: User) => {
     setEditing(u)
-    setForm({ username: u.username, role: u.role, password: "" })
+    setForm({ username: u.username, role: u.role, password: "", santri_id: u.orang_tuas?.santri_id ?? "" })
     setDialogOpen(true)
   }
 
@@ -71,30 +98,50 @@ export default function UsersPage() {
 
     const payload = { username: form.username, role: form.role }
 
+    if (!editing && form.role === "ORANG_TUA" && !form.santri_id) {
+      setErrorMsg("Pilih santri untuk akun orang tua")
+      return
+    }
+
     if (editing) {
       const { error: userErr } = await supabase.from("users").update(payload).eq("id", editing.id)
-      if (userErr) { setErrorMsg(formatAuthError(userErr.message)); return }
+      if (userErr) { setErrorMsg(userErr.message); return }
       if (form.password) {
-        const { error: pwdErr } = await supabase.auth.admin.updateUserById(editing.id, { password: form.password })
-        if (pwdErr) { setErrorMsg(formatAuthError(pwdErr.message)); return }
+        try {
+          await adminAuth("update", { id: editing.id, password: form.password })
+        } catch (err) {
+          setErrorMsg((err as Error).message)
+          return
+        }
       }
     } else {
-      const { data: authUser, error: authErr } = await supabase.auth.admin.createUser({
-        email: `${form.username}@tpa-baitulyatama.local`,
-        password: form.password,
-        email_confirm: true,
-      })
-      if (authErr) {
-        setErrorMsg(formatAuthError(authErr.message))
+      let authId: string
+      try {
+        const created = await adminAuth("create", {
+          email: `${form.username}@tpa-baitulyatama.local`,
+          password: form.password,
+        })
+        authId = created.id
+      } catch (err) {
+        setErrorMsg((err as Error).message)
         return
       }
-      if (authUser.user) {
-        const { error: userInsertErr } = await supabase.from("users").insert({ id: authUser.user.id, ...payload })
-        if (userInsertErr) {
-          await supabase.auth.admin.deleteUser(authUser.user.id)
-          setErrorMsg(userInsertErr.message.includes("duplicate") || userInsertErr.message.includes("unique")
-            ? `Username "${form.username}" sudah digunakan`
-            : formatAuthError(userInsertErr.message))
+      const { error: userInsertErr } = await supabase.from("users").insert({ id: authId, ...payload })
+      if (userInsertErr) {
+        await adminAuth("delete", { id: authId })
+        setErrorMsg(userInsertErr.message.includes("duplicate") || userInsertErr.message.includes("unique")
+          ? `Username "${form.username}" sudah digunakan`
+          : userInsertErr.message)
+        return
+      }
+      if (form.role === "ORANG_TUA") {
+        const { error: linkErr } = await supabase.from("orang_tuas").insert({ user_id: authId, santri_id: form.santri_id })
+        if (linkErr) {
+          await supabase.from("users").delete().eq("id", authId)
+          await adminAuth("delete", { id: authId })
+          setErrorMsg(linkErr.message.includes("duplicate") || linkErr.message.includes("unique")
+            ? "Santri ini sudah memiliki akun orang tua"
+            : linkErr.message)
           return
         }
       }
@@ -109,8 +156,17 @@ export default function UsersPage() {
     if (!confirmDel) return
     const id = confirmDel.id
     setConfirmDel(null)
-    await supabase.auth.admin.deleteUser(id)
-    await supabase.from("users").delete().eq("id", id)
+    await supabase.from("orang_tuas").delete().eq("user_id", id)
+    const { error: userDelErr } = await supabase.from("users").delete().eq("id", id)
+    if (userDelErr) {
+      setErrorMsg("User terhubung ke data profil (pengajar/santri). Hapus melalui halaman terkait terlebih dahulu.")
+      return
+    }
+    try {
+      await adminAuth("delete", { id })
+    } catch (err) {
+      setErrorMsg((err as Error).message)
+    }
     fetchData()
   }
 
@@ -118,6 +174,8 @@ export default function UsersPage() {
     u.username.toLowerCase().includes(search.toLowerCase()) ||
     u.role.toLowerCase().includes(search.toLowerCase())
   )
+
+  const availableSantris = santris.filter((s) => !linkedSantriIds.includes(s.id))
 
   const roleIcons: Record<string, React.ComponentType<{ className?: string }>> = {
     ADMIN: Shield,
@@ -155,6 +213,7 @@ export default function UsersPage() {
               <TableRow>
                 <TableHead>Username</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Terhubung</TableHead>
                 <TableHead>Terdaftar</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
@@ -162,7 +221,7 @@ export default function UsersPage() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     Tidak ada user ditemukan
                   </TableCell>
                 </TableRow>
@@ -172,6 +231,9 @@ export default function UsersPage() {
                     <TableCell className="font-medium">{u.username}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{formatRole(u.role)}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {u.orang_tuas?.santris?.nama ?? "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(u.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
@@ -212,7 +274,7 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={form.role} onValueChange={(v: string | null) => v && setForm({ ...form, role: v })} items={[{ label: "Admin", value: "ADMIN" }, { label: "Pengajar", value: "PENGAJAR" }, { label: "Orang Tua", value: "ORANG_TUA" }]}>
+              <Select value={form.role} onValueChange={(v: string | null) => v && setForm({ ...form, role: v, santri_id: "" })} items={[{ label: "Admin", value: "ADMIN" }, { label: "Pengajar", value: "PENGAJAR" }, { label: "Orang Tua", value: "ORANG_TUA" }]}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ADMIN">Admin</SelectItem>
@@ -221,6 +283,33 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </div>
+            {form.role === "ORANG_TUA" && (
+              editing ? (
+                <div className="space-y-2">
+                  <Label>Santri terhubung</Label>
+                  <Input value={editing.orang_tuas?.santris?.nama ?? "-"} className="h-9" disabled />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Santri</Label>
+                  <Select
+                    value={form.santri_id}
+                    onValueChange={(v: string | null) => {
+                      if (!v) return
+                      const santri = santris.find((s) => s.id === v)
+                      setForm({ ...form, santri_id: v, username: santri ? normalizeUsername(santri.nama) : form.username })
+                    }}
+                    items={availableSantris.map((s) => ({ label: s.nama, value: s.id }))}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Pilih santri" /></SelectTrigger>
+                    <SelectContent>
+                      {availableSantris.map((s) => <SelectItem key={s.id} value={s.id}>{s.nama}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {availableSantris.length === 0 && <p className="text-xs text-muted-foreground">Semua santri sudah memiliki akun orang tua</p>}
+                </div>
+              )
+            )}
             <div className="space-y-2">
               <Label>Password {editing ? "(kosongkan jika tidak diubah)" : ""}</Label>
               <div className="relative">
@@ -269,18 +358,4 @@ export default function UsersPage() {
       />
     </div>
   )
-}
-
-function formatAuthError(msg: string): string {
-  const lower = msg.toLowerCase()
-  if (lower.includes("already been registered") || lower.includes("already registered") || lower.includes("duplicate")) {
-    return "Username / email sudah digunakan"
-  }
-  if (lower.includes("invalid") && lower.includes("password")) {
-    return "Password tidak valid (minimal 6 karakter)"
-  }
-  if (lower.includes("not allowed") || lower.includes("forbidden") || lower.includes("unauthorized")) {
-    return "Operasi tidak diizinkan. Periksa kembali username — kemungkinan sudah digunakan oleh akun lain."
-  }
-  return msg
 }
