@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Calendar, Clock } from "lucide-react";
 import { formatHari, formatTime } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
@@ -14,6 +14,7 @@ interface Jadwal {
   hari: string;
   jam_mulai: string;
   jam_selesai: string;
+  kelompok?: { id: string; nama: string; sesi?: { nama: string } | null } | null;
 }
 
 export default function PengajarJadwalPage() {
@@ -25,15 +26,15 @@ export default function PengajarJadwalPage() {
   useEffect(() => {
     const fetchData = async () => {
       if (!user) return;
-      const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
+      const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single();
       if (!pengajar) { setLoading(false); return; }
       const { data } = await supabase
-        .from("jadwals")
-        .select("id, hari, jam_mulai, jam_selesai")
-        .eq("pengajar_id", pengajar.id)
+        .from("jadwal")
+        .select("*, kelompok(nama, sesi(nama))")
+        .eq("kelompok.pengajar_id", pengajar.id)
         .order("hari")
         .order("jam_mulai");
-      setJadwals(data ?? []);
+      setJadwals((data ?? []) as unknown as Jadwal[]);
       setLoading(false);
     };
     fetchData();
@@ -44,7 +45,7 @@ export default function PengajarJadwalPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Ritme mengajar" title="Jadwal Anda" description="Hari, sesi, dan jam mengajar yang ditetapkan admin." />
+      <PageHeader eyebrow="Ritme mengajar" title="Jadwal Anda" description="Hari, kelompok, dan jam mengajar yang ditetapkan admin." />
 
       {loading ? (
         <div className="space-y-2">
@@ -62,19 +63,19 @@ export default function PengajarJadwalPage() {
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Hari</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Sesi</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kelompok</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Jam</th>
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((j) => {
-                  const sesi = j.jam_mulai.slice(0, 5) === "07:30" ? "Pagi" : "Sore";
+                  const sesi = j.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : j.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-";
                   return (
                     <tr key={j.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors duration-150">
                       <td className="px-4 py-3">
                         <Badge variant="outline" className="text-xs">{formatHari(j.hari)}</Badge>
                       </td>
-                      <td className="px-4 py-3 font-medium text-foreground">{sesi}</td>
+                      <td className="px-4 py-3 font-medium text-foreground">{sesi} · Kelompok {j.kelompok?.nama ?? "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground font-tabular">
                         <span className="inline-flex items-center gap-1.5">
                           <Clock className="h-3.5 w-3.5" />

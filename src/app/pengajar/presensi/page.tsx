@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +11,7 @@ import { UserX, Loader2 } from "lucide-react";
 import { formatStatus, getStatusBadgeVariant } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 
-interface Santri { id: string; nama: string; }
+interface Santri { id: string; nama: string; kelompok_id: string | null }
 
 const DAILY_STATUSES = [
   { label: "Hadir", value: "HADIR" },
@@ -21,47 +20,46 @@ const DAILY_STATUSES = [
   { label: "Alpha", value: "ALPHA" },
 ];
 
-const HARI_MAP = ["MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"];
-
 export default function PresensiPage() {
   const { user } = useAuth();
-  const [dailySesi, setDailySesi] = useState("PAGI");
   const [dailyDate, setDailyDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [dailyRows, setDailyRows] = useState<{ santri: Santri; status: string }[]>([]);
   const [dailyLoading, setDailyLoading] = useState(false);
   const [savingStatus, setSavingStatus] = useState<string | null>(null);
   const supabase = createClient();
 
-  // Load daily attendance table
   useEffect(() => {
     const loadDaily = async () => {
-      if (!user || !dailySesi || !dailyDate) { setDailyRows([]); return; }
+      if (!user || !dailyDate) { setDailyRows([]); return; }
       setDailyLoading(true);
-      const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
+      const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single();
       if (!pengajar) { setDailyLoading(false); return; }
 
-      const { data: santriData } = await supabase.from("santris").select("id, nama").eq("sesi", dailySesi).order("nama");
-      const santriList = santriData ?? [];
+      const { data: kelompokData } = await supabase.from("kelompok").select("id").eq("pengajar_id", pengajar.id);
+      const kelompokIds = (kelompokData ?? []).map((k) => k.id);
+      if (kelompokIds.length === 0) { setDailyLoading(false); setDailyRows([]); return; }
 
-      const { data: perkData } = await supabase
-        .from("perkembangan_santris")
-        .select("student_id")
-        .eq("teacher_id", pengajar.id)
-        .eq("tanggal", dailyDate);
-      const perkIds = new Set((perkData ?? []).map((p) => p.student_id));
+      const { data: santriData } = await supabase.from("santri").select("id, nama, kelompok_id").in("kelompok_id", kelompokIds).order("nama");
+      const santriList = (santriData ?? []) as unknown as Santri[];
+      if (santriList.length === 0) { setDailyLoading(false); setDailyRows([]); return; }
+      const santriIds = santriList.map((s) => s.id);
 
-      const { data: absenData } = await supabase
-        .from("absensis")
-        .select("student_id, status, pertemuans(tanggal)")
-        .eq("teacher_id", pengajar.id);
-      type AbsenRow = { student_id: string; status: string; pertemuans: { tanggal: string }[] | null };
+      const [presensiRes, bacaanRes, cicilanRes, doaRes, salatRes] = await Promise.all([
+        supabase.from("presensi").select("santri_id, status").eq("tanggal", dailyDate).in("santri_id", santriIds),
+        supabase.from("perkembangan_bacaan").select("santri_id").eq("tanggal", dailyDate).in("santri_id", santriIds),
+        supabase.from("hafalan_surat_cicilan").select("hafalan_santri(santri_id)").eq("tanggal", dailyDate).in("hafalan_santri.santri_id", santriIds),
+        supabase.from("perkembangan_hafalan_doa").select("santri_id").eq("tanggal", dailyDate).in("santri_id", santriIds),
+        supabase.from("praktik_salat").select("santri_id").eq("tanggal", dailyDate).in("santri_id", santriIds),
+      ]);
+
       const absenMap = new Map<string, string>();
-      ((absenData ?? []) as unknown as AbsenRow[]).forEach((a) => {
-        const tanggal = a.pertemuans?.[0]?.tanggal;
-        if (tanggal === dailyDate) {
-          absenMap.set(a.student_id, a.status);
-        }
-      });
+      ;((presensiRes.data ?? []) as unknown as { santri_id: string; status: string }[]).forEach((a) => absenMap.set(a.santri_id, a.status));
+
+      const perkIds = new Set<string>();
+      ;((bacaanRes.data ?? []) as unknown as { santri_id: string }[]).forEach((r) => perkIds.add(r.santri_id))
+      ;((cicilanRes.data ?? []) as unknown as { hafalan_santri?: { santri_id: string } | null }[]).forEach((r) => { if (r.hafalan_santri?.santri_id) perkIds.add(r.hafalan_santri.santri_id) })
+      ;((doaRes.data ?? []) as unknown as { santri_id: string }[]).forEach((r) => perkIds.add(r.santri_id))
+      ;((salatRes.data ?? []) as unknown as { santri_id: string }[]).forEach((r) => perkIds.add(r.santri_id))
 
       const rows = santriList.map((s) => ({
         santri: s,
@@ -71,86 +69,38 @@ export default function PresensiPage() {
       setDailyLoading(false);
     };
     loadDaily();
-  }, [user, dailySesi, dailyDate]);
+  }, [user, dailyDate]);
 
-  const ensureMeeting = async (pengajarId: string): Promise<string | null> => {
-    const day = HARI_MAP[new Date(`${dailyDate}T00:00:00`).getDay()];
-    const sesiPagi = dailySesi === "PAGI";
-    const { data: jadwal } = await supabase
-      .from("jadwals")
-      .select("id, jam_mulai")
-      .eq("pengajar_id", pengajarId)
-      .eq("hari", day)
-      .limit(5);
-
-    type JadwalRow = { id: string; jam_mulai: string };
-    const match = ((jadwal ?? []) as JadwalRow[]).find((j) => (sesiPagi ? j.jam_mulai.slice(0, 5) === "07:30" : j.jam_mulai.slice(0, 5) === "16:00"));
-    if (!match) return null;
-
-    let { data: pertemuan } = await supabase
-      .from("pertemuans")
-      .select("id")
-      .eq("jadwal_id", match.id)
-      .eq("tanggal", dailyDate)
-      .maybeSingle();
-    if (!pertemuan) {
-      const { data: created } = await supabase
-        .from("pertemuans")
-        .insert({ jadwal_id: match.id, tanggal: dailyDate, status: "SELESAI", created_by: pengajarId })
-        .select("id")
-        .single();
-      pertemuan = created;
-    }
-    return pertemuan?.id ?? null;
-  };
-
-  const handleSetStatus = async (santriId: string, status: string) => {
+  const handleSetStatus = async (santri: Santri, status: string) => {
     if (!user) return;
-    setSavingStatus(santriId);
-    const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
+    setSavingStatus(santri.id);
+    const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single();
     if (!pengajar) { setSavingStatus(null); return; }
 
-    const meetingId = await ensureMeeting(pengajar.id);
-    if (!meetingId) {
-      setSavingStatus(null);
-      return;
-    }
-
-    const { error } = await supabase.from("absensis").upsert({
-      meeting_id: meetingId,
-      student_id: santriId,
-      teacher_id: pengajar.id,
+    const { error } = await supabase.from("presensi").upsert({
+      santri_id: santri.id,
+      tanggal: dailyDate,
       status,
-    }, { onConflict: "meeting_id,student_id" });
+      pengajar_id: pengajar.id,
+      kelompok_id: santri.kelompok_id,
+    }, { onConflict: "santri_id,tanggal" });
 
     if (!error) {
-      setDailyRows((rows) => rows.map((r) => r.santri.id === santriId ? { ...r, status } : r));
+      setDailyRows((rows) => rows.map((r) => r.santri.id === santri.id ? { ...r, status } : r));
     }
     setSavingStatus(null);
   };
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Kehadiran" title="Presensi harian" description="Semua santri pada sesi terpilih, lengkap dengan keterangan kehadiran." backHref="/pengajar" />
+      <PageHeader eyebrow="Kehadiran" title="Presensi harian" description="Semua santri dalam kelompok Anda, lengkap dengan keterangan kehadiran." backHref="/pengajar" />
 
       <Card className="card-elevated">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-sm font-medium">Presensi Santri · {dailySesi === "PAGI" ? "Sesi Pagi" : "Sesi Sore"}</CardTitle>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">Sesi</Label>
-              <Select value={dailySesi} onValueChange={(v: string | null) => setDailySesi(v ?? "PAGI")} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PAGI">Pagi</SelectItem>
-                  <SelectItem value="SORE">Sore</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">Tanggal</Label>
-              <DatePicker value={dailyDate} onChange={setDailyDate} />
-            </div>
+          <CardTitle className="text-sm font-medium">Presensi Santri</CardTitle>
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">Tanggal</Label>
+            <DatePicker value={dailyDate} onChange={setDailyDate} />
           </div>
         </CardHeader>
         <CardContent>
@@ -161,7 +111,7 @@ export default function PresensiPage() {
           ) : dailyRows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border p-5 text-center sm:p-8">
               <UserX className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
-              <p className="text-sm text-muted-foreground">Tidak ada santri pada sesi ini</p>
+              <p className="text-sm text-muted-foreground">Tidak ada santri pada kelompok Anda</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -185,7 +135,7 @@ export default function PresensiPage() {
                       <button
                         key={s.value}
                         disabled={savingStatus === row.santri.id || row.status === s.value}
-                        onClick={() => handleSetStatus(row.santri.id, s.value)}
+                        onClick={() => handleSetStatus(row.santri, s.value)}
                         className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 ${
                           row.status === s.value
                             ? "bg-primary text-primary-foreground border-primary"

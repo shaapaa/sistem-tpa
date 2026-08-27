@@ -10,257 +10,327 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, BookOpen, BookMarked, Moon, ArrowLeft, CheckCircle } from "lucide-react";
-import Link from "next/link";
+import { Save, BookOpen, BookMarked, Moon, CheckCircle } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 
-interface Santri { id: string; nama: string; sesi: string | null }
+interface Santri { id: string; nama: string; kelompok_id: string | null }
+interface Kelompok { id: string; nama: string }
+interface Surat { id: string; nomor: number; nama: string; jumlah_ayat: number }
+interface Doa { id: string; nama: string }
+interface Komponen { id: string; nama: string }
+interface JenisSalat { id: string; nama: string }
 
-const IQRA_OPTIONS = [1, 2, 3, 4, 5, 6];
-const JUZ_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1);
-const SURAH_LIST = [
-  "Al-Fatihah", "Al-Baqarah", "Ali Imran", "An-Nisa", "Al-Maidah",
-  "Al-An'am", "Al-A'raf", "Al-Anfal", "At-Tawbah", "Yunus",
-  "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim", "Al-Hijr",
-  "An-Nahl", "Al-Isra", "Al-Kahf", "Maryam", "Ta-Ha",
-  "Al-Anbiya", "Al-Hajj", "Al-Mu'minun", "An-Nur", "Al-Furqan",
-  "Ash-Shu'ara", "An-Naml", "Al-Qasas", "Al-Ankabut", "Ar-Rum",
-  "Luqman", "As-Sajdah", "Al-Ahzab", "Saba", "Fatir",
-  "Ya Sin", "As-Saffat", "Sad", "Az-Zumar", "Ghafir",
-  "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhan", "Al-Jathiyah",
-  "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujurat", "Qaf",
-  "Adh-Dhariyat", "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahman",
-  "Al-Waqi'ah", "Al-Hadid", "Al-Mujadilah", "Al-Hashr", "Al-Mumtahanah",
-  "As-Saf", "Al-Jumu'ah", "Al-Munafiqun", "At-Taghabun", "At-Talaq",
-  "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haqqah", "Al-Ma'arij",
-  "Nuh", "Al-Jinn", "Al-Muzzammil", "Al-Muddaththir", "Al-Qiyamah",
-  "Al-Insan", "Al-Mursalat", "An-Naba", "An-Nazi'at", "Abasa",
-  "At-Takwir", "Al-Infitar", "Al-Mutaffifin", "Al-Inshiqaq", "Al-Buruj",
-  "At-Tariq", "Al-A'la", "Al-Ghashiyah", "Al-Fajr", "Al-Balad",
-  "Ash-Shams", "Al-Layl", "Ad-Duha", "Ash-Sharh", "At-Tin",
-  "Al-Alaq", "Al-Qadr", "Al-Bayyinah", "Az-Zalzalah", "Al-Adiyat",
-  "Al-Qari'ah", "At-Takathur", "Al-Asr", "Al-Humazah", "Al-Fil",
-  "Quraysh", "Al-Ma'un", "Al-Kawthar", "Al-Kafirun", "An-Nasr",
-  "Al-Masad", "Al-Ikhlas", "Al-Falaq", "An-Nas"
+const BAC_SURAT_STATUS = [
+  { label: "Lancar", value: "LANCAR" },
+  { label: "Kurang Lancar", value: "KURANG_LANCAR" },
+  { label: "Tidak Lancar", value: "TIDAK_LANCAR" },
 ];
-const SHOLAT_OPTIONS = ["Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya", "Sholat Dhuha", "Sholat Tahajud", "Sholat Sunnah Lainnya"];
-const PENILAIAN_OPTIONS = [
-  { label: "Baik", value: "BAIK" },
-  { label: "Cukup Baik", value: "CUKUP_BAIK" },
-  { label: "Kurang", value: "KURANG" },
+const KURANG_STATUS = [
+  { label: "Lancar", value: "LANCAR" },
+  { label: "Butuh Bimbingan", value: "BUTUH_BIMBINGAN" },
 ];
+
+function SearchableSelect({ value, onChange, placeholder, options }: {
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  options: { value: string; label: string }[]
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const filtered = options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()));
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent px-2.5 text-sm text-left text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        <span className={selected ? "truncate" : "text-muted-foreground"}>{selected?.label ?? placeholder}</span>
+        <span className="text-muted-foreground">▾</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-11 z-50 w-full rounded-lg border border-border bg-popover text-popover-foreground shadow-lg">
+          <div className="p-2 pb-1">
+            <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari..." className="h-9" />
+          </div>
+          <div className="max-h-52 overflow-y-auto p-1">
+            {filtered.length === 0 ? (
+              <p className="px-2.5 py-2 text-sm text-muted-foreground">Tidak ditemukan</p>
+            ) : (
+              filtered.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => { onChange(o.value); setOpen(false); setQuery(""); }}
+                  className={`flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-muted ${value === o.value ? "bg-primary/10 font-medium" : ""}`}
+                >
+                  {o.label}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PerkembanganPage() {
   const { user } = useAuth();
-  const [selectedSesi, setSelectedSesi] = useState("");
+  const [kelompoks, setKelompoks] = useState<Kelompok[]>([]);
+  const [selectedKelompok, setSelectedKelompok] = useState("");
   const [santris, setSantris] = useState<Santri[]>([]);
   const [selectedSantri, setSelectedSantri] = useState("");
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [surats, setSurats] = useState<Surat[]>([]);
+  const [doas, setDoas] = useState<Doa[]>([]);
+  const [komponens, setKomponens] = useState<Komponen[]>([]);
+  const [jenisSalats, setJenisSalats] = useState<JenisSalat[]>([]);
   const supabase = createClient();
 
   // Bacaan form
   const [jenisBacaan, setJenisBacaan] = useState("IQRA");
-  const [iqraForm, setIqraForm] = useState({ iqra_ke: "", halaman: "" });
-  const [quranForm, setQuranForm] = useState({ juz: "", surah: "", ayat_mulai: "", ayat_selesai: "" });
-  const [penilaianBacaan, setPenilaianBacaan] = useState("BAIK");
+  const [iqraJilid, setIqraJilid] = useState("");
+  const [iqraHalaman, setIqraHalaman] = useState("");
+  const [quranSuratId, setQuranSuratId] = useState("");
+  const [quranJuz, setQuranJuz] = useState("");
+  const [quranAyatMulai, setQuranAyatMulai] = useState("");
+  const [quranAyatSelesai, setQuranAyatSelesai] = useState("");
+  const [statusBacaan, setStatusBacaan] = useState("LANCAR");
   const [catatanBacaan, setCatatanBacaan] = useState("");
 
   // Hafalan form
-  const [hafalanForm, setHafalanForm] = useState({ nama_surah: "", penilaian: "BAIK", catatan: "" });
+  const [jenisHafalan, setJenisHafalan] = useState("SURAT");
+  const [suratId, setSuratId] = useState("");
+  const [ayatMulai, setAyatMulai] = useState("");
+  const [ayatSelesai, setAyatSelesai] = useState("");
+  const [statusHafalan, setStatusHafalan] = useState("LANCAR");
+  const [doaId, setDoaId] = useState("");
+  const [catatanHafalan, setCatatanHafalan] = useState("");
 
-  // Praktik Sholat form
-  const [sholatForm, setSholatForm] = useState({ jenis_sholat: "Subuh", penilaian: "BAIK", catatan: "" });
+  // Sholat form
+  const [jenisSalatId, setJenisSalatId] = useState("");
+  const [statusSholat, setStatusSholat] = useState("LANCAR");
+  const [catatanSholat, setCatatanSholat] = useState("");
+  const [komponenStatus, setKomponenStatus] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchMasters = async () => {
+      const [suratRes, doaRes, komponenRes, jenisRes] = await Promise.all([
+        supabase.from("surat").select("id, nomor, nama, jumlah_ayat").or("juz.eq.30,nomor.eq.1").order("nomor"),
+        supabase.from("doa").select("id, nama").eq("aktif", true).order("nama"),
+        supabase.from("komponen_salat").select("id, nama").eq("aktif", true).order("nama"),
+        supabase.from("jenis_salat").select("id, nama").eq("aktif", true).order("nama"),
+      ])
+      setSurats((suratRes.data ?? []) as Surat[])
+      setDoas((doaRes.data ?? []) as Doa[])
+      setKomponens((komponenRes.data ?? []) as Komponen[])
+      setJenisSalats((jenisRes.data ?? []) as JenisSalat[])
+    }
+    fetchMasters()
+  }, [])
+
+  useEffect(() => {
+    const fetchPengajar = async () => {
+      if (!user) return
+      const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
+      if (!pengajar) return
+      const { data: k } = await supabase.from("kelompok").select("id, nama").eq("pengajar_id", pengajar.id).order("nama")
+      setKelompoks((k ?? []) as Kelompok[])
+    }
+    fetchPengajar()
+  }, [user])
 
   useEffect(() => {
     const fetchSantris = async () => {
-      if (!selectedSesi) { setSantris([]); return; }
-      const { data } = await supabase
-        .from("santris")
-        .select("id, nama, sesi")
-        .eq("sesi", selectedSesi)
-        .order("nama");
-      setSantris(data ?? []);
-      setSelectedSantri("");
-      setSearch("");
-    };
-    fetchSantris();
-  }, [selectedSesi]);
+      if (!selectedKelompok) { setSantris([]); return; }
+      const { data } = await supabase.from("santri").select("id, nama, kelompok_id").eq("kelompok_id", selectedKelompok).order("nama")
+      setSantris((data ?? []) as Santri[])
+      setSelectedSantri("")
+      setSearch("")
+    }
+    fetchSantris()
+  }, [selectedKelompok])
 
-  const filteredSantris = santris.filter((s) =>
-    s.nama.toLowerCase().includes(search.toLowerCase())
-  );
+  // Ayat mulai otomatis dari capaian terakhir surat
+  useEffect(() => {
+    const loadAyatMulai = async () => {
+      if (!selectedSantri || !suratId) { setAyatMulai(""); return }
+      const { data: hs } = await supabase.from("hafalan_santri").select("id").eq("santri_id", selectedSantri).eq("surat_id", suratId).maybeSingle()
+      if (!hs) { setAyatMulai("1"); return }
+      const { data: last } = await supabase.from("hafalan_surat_cicilan").select("ayat_selesai").eq("hafalan_santri_id", hs.id).order("tanggal", { ascending: false }).limit(1).maybeSingle()
+      setAyatMulai(last?.ayat_selesai ? String((last.ayat_selesai ?? 0) + 1) : "1")
+    }
+    loadAyatMulai()
+  }, [selectedSantri, suratId])
+
+  const filteredSantris = santris.filter((s) => s.nama.toLowerCase().includes(search.toLowerCase()))
+
+  const today = new Date().toISOString().split("T")[0]
+
+  const autoPresensi = async (santriId: string, pengajarId: string) => {
+    try {
+      const santri = santris.find((s) => s.id === santriId)
+      const { data: existing } = await supabase.from("presensi").select("status").eq("santri_id", santriId).eq("tanggal", today).maybeSingle()
+      if (!existing) {
+        await supabase.from("presensi").insert({ santri_id: santriId, tanggal: today, status: "HADIR", pengajar_id: pengajarId, kelompok_id: santri?.kelompok_id ?? null })
+      }
+    } catch { /* best effort */ }
+  }
 
   const handleSaveBacaan = async () => {
-    if (!selectedSantri || !user) return;
-    setSaving(true);
-    setSaved(false);
-
-    const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
-    if (!pengajar) { setSaving(false); return; }
-
-    const payload: any = {
-      student_id: selectedSantri,
-      teacher_id: pengajar.id,
-      tanggal: new Date().toISOString().split("T")[0],
-      tipe_perkembangan: "BACAAN",
+    if (!selectedSantri || !user) return
+    setErrorMsg("")
+    setSaving(true); setSaved(false)
+    const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
+    if (!pengajar) { setSaving(false); return }
+    const payload: Record<string, unknown> = {
+      santri_id: selectedSantri,
+      pengajar_id: pengajar.id,
+      tanggal: today,
       jenis_bacaan: jenisBacaan,
-      penilaian: penilaianBacaan,
+      status: statusBacaan,
       catatan: catatanBacaan || null,
-    };
-
+    }
     if (jenisBacaan === "IQRA") {
-      payload.iqra_ke = parseInt(iqraForm.iqra_ke) || null;
-      payload.halaman_iqra = parseInt(iqraForm.halaman) || null;
+      payload.jilid = parseInt(iqraJilid) || null
+      payload.halaman = parseInt(iqraHalaman) || null
     } else {
-      payload.juz = parseInt(quranForm.juz) || null;
-      payload.surah = quranForm.surah || null;
+      payload.surat_id = quranSuratId || null
+      payload.juz = parseInt(quranJuz) || null
+      payload.ayat_mulai = parseInt(quranAyatMulai) || null
+      payload.ayat_selesai = parseInt(quranAyatSelesai) || null
     }
-
-    await supabase.from("perkembangan_santris").insert(payload);
-
-    // Auto-create attendance (best-effort, never blocks save confirmation)
-    try {
-      const santri = santris.find(s => s.id === selectedSantri);
-      if (santri) {
-        const today = new Date().toISOString().split("T")[0];
-
-        const { data: existingAbsen } = await supabase
-          .from("absensis")
-          .select("id")
-          .eq("student_id", selectedSantri)
-          .eq("teacher_id", pengajar.id)
-          .gte("created_at", `${today}T00:00:00`)
-          .lte("created_at", `${today}T23:59:59`)
-          .maybeSingle();
-
-        if (!existingAbsen) {
-          const HARI_MAP = ["MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"];
-          const todayHari = HARI_MAP[new Date().getDay()];
-
-          const { data: jadwal } = await supabase
-            .from("jadwals")
-            .select("id")
-            .eq("pengajar_id", pengajar.id)
-            .eq("hari", todayHari)
-            .limit(1)
-            .maybeSingle();
-
-          if (jadwal) {
-            let { data: pertemuan } = await supabase
-              .from("pertemuans")
-              .select("id")
-              .eq("jadwal_id", jadwal.id)
-              .eq("tanggal", today)
-              .maybeSingle();
-
-            if (!pertemuan) {
-              const { data: newPertemuan } = await supabase
-                .from("pertemuans")
-                .insert({ jadwal_id: jadwal.id, tanggal: today, status: "SELESAI", created_by: pengajar.id })
-                .select("id")
-                .single();
-              pertemuan = newPertemuan;
-            }
-
-            if (pertemuan) {
-              await supabase.from("absensis").upsert({
-                meeting_id: pertemuan.id,
-                student_id: selectedSantri,
-                teacher_id: pengajar.id,
-                status: "HADIR",
-              }, { onConflict: "meeting_id,student_id" });
-            }
-          }
-        }
-      }
-    } catch {
-      // attendance failure must not hide the saved indicator
-    }
-
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-    setCatatanBacaan("");
-  };
+    await supabase.from("perkembangan_bacaan").insert(payload)
+    await autoPresensi(selectedSantri, pengajar.id)
+    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
+    setCatatanBacaan(""); setIqraJilid(""); setIqraHalaman(""); setQuranSuratId(""); setQuranJuz(""); setQuranAyatMulai(""); setQuranAyatSelesai("")
+  }
 
   const handleSaveHafalan = async () => {
-    if (!selectedSantri || !user) return;
-    setSaving(true);
-    setSaved(false);
-
-    const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
-    if (!pengajar) { setSaving(false); return; }
-
-    await supabase.from("perkembangan_santris").insert({
-      student_id: selectedSantri,
-      teacher_id: pengajar.id,
-      tanggal: new Date().toISOString().split("T")[0],
-      tipe_perkembangan: "HAFALAN",
-      nama_surah: hafalanForm.nama_surah,
-      penilaian: hafalanForm.penilaian,
-      catatan: hafalanForm.catatan || null,
-    });
-
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-    setHafalanForm({ nama_surah: "", penilaian: "BAIK", catatan: "" });
-  };
+    if (!selectedSantri || !user) return
+    setErrorMsg("")
+    const surat = surats.find((s) => s.id === suratId)
+    const sampai = parseInt(ayatSelesai) || 0
+    const mulai = parseInt(ayatMulai) || 1
+    if (jenisHafalan === "SURAT") {
+      if (!suratId) { setErrorMsg("Pilih surah terlebih dahulu"); return }
+      if (!sampai) { setErrorMsg("Isi ayat terakhir yang dihafal"); return }
+      if (surat && sampai > surat.jumlah_ayat) {
+        setErrorMsg(`Ayat melebihi jumlah ayat surah ${surat.nama} (hanya ${surat.jumlah_ayat} ayat)`)
+        return
+      }
+      if (sampai < mulai) {
+        setErrorMsg("Ayat selesai tidak boleh kurang dari ayat mulai")
+        return
+      }
+    } else {
+      if (!doaId) { setErrorMsg("Pilih doa terlebih dahulu"); return }
+    }
+    setSaving(true); setSaved(false)
+    const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
+    if (!pengajar) { setSaving(false); return }
+    if (jenisHafalan === "SURAT") {
+      const { data: hs } = await supabase.from("hafalan_santri").select("id").eq("santri_id", selectedSantri).eq("surat_id", suratId).maybeSingle()
+      let hsId = hs?.id
+      if (!hsId) {
+        const { data: created } = await supabase.from("hafalan_santri").insert({ santri_id: selectedSantri, surat_id: suratId }).select("id").single()
+        hsId = created?.id
+      }
+      if (hsId) {
+        await supabase.from("hafalan_surat_cicilan").insert({
+          hafalan_santri_id: hsId,
+          pengajar_id: pengajar.id,
+          tanggal: today,
+          ayat_mulai: mulai,
+          ayat_selesai: sampai,
+          status: statusHafalan,
+          jenis: "setoran_baru",
+          catatan: catatanHafalan || null,
+        })
+      }
+    } else {
+      await supabase.from("perkembangan_hafalan_doa").insert({
+        santri_id: selectedSantri,
+        doa_id: doaId,
+        pengajar_id: pengajar.id,
+        tanggal: today,
+        status: statusHafalan,
+        catatan: catatanHafalan || null,
+      })
+    }
+    await autoPresensi(selectedSantri, pengajar.id)
+    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
+    setSuratId(""); setAyatMulai(""); setAyatSelesai(""); setDoaId(""); setCatatanHafalan("")
+  }
 
   const handleSaveSholat = async () => {
-    if (!selectedSantri || !user) return;
-    setSaving(true);
-    setSaved(false);
-
-    const { data: pengajar } = await supabase.from("pengajars").select("id").eq("user_id", user.id).single();
-    if (!pengajar) { setSaving(false); return; }
-
-    await supabase.from("perkembangan_santris").insert({
-      student_id: selectedSantri,
-      teacher_id: pengajar.id,
-      tanggal: new Date().toISOString().split("T")[0],
-      tipe_perkembangan: "PRAKTIK_SHOLAT",
-      jenis_sholat: sholatForm.jenis_sholat,
-      penilaian: sholatForm.penilaian,
-      catatan: sholatForm.catatan || null,
-    });
-
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-    setSholatForm({ jenis_sholat: "Subuh", penilaian: "BAIK", catatan: "" });
-  };
+    if (!selectedSantri || !user) return
+    setErrorMsg("")
+    setSaving(true); setSaved(false)
+    const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
+    if (!pengajar) { setSaving(false); return }
+    // Level 1: komponen salat
+    for (const komponen of komponens) {
+      const st = komponenStatus[komponen.id]
+      if (st) {
+        await supabase.from("perkembangan_salat_komponen").insert({
+          santri_id: selectedSantri,
+          komponen_salat_id: komponen.id,
+          pengajar_id: pengajar.id,
+          tanggal: today,
+          status: st,
+        })
+      }
+    }
+    // Level 2: praktik salat keseluruhan
+    if (jenisSalatId) {
+      await supabase.from("praktik_salat").insert({
+        santri_id: selectedSantri,
+        jenis_salat_id: jenisSalatId,
+        pengajar_id: pengajar.id,
+        tanggal: today,
+        status: statusSholat,
+        catatan: catatanSholat || null,
+      })
+    }
+    await autoPresensi(selectedSantri, pengajar.id)
+    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
+    setJenisSalatId(""); setCatatanSholat(""); setKomponenStatus({})
+  }
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Catatan belajar" title="Input perkembangan" description="Catat bacaan, hafalan, dan praktik sholat santri." backHref="/pengajar" />
+      <PageHeader eyebrow="Catatan belajar" title="Input perkembangan" description="Catat bacaan, hafalan, dan praktik salat santri." backHref="/pengajar" />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Sesi Belajar</Label>
-          <Select value={selectedSesi} onValueChange={(v: string | null) => setSelectedSesi(v ?? "")} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Pilih sesi pagi/sore" /></SelectTrigger>
+          <Label>Kelompok</Label>
+          <Select value={selectedKelompok} onValueChange={(v) => setSelectedKelompok(v ?? "")} items={kelompoks.map((k) => ({ label: `Kelompok ${k.nama}`, value: k.id }))}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelompok" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="PAGI">Pagi</SelectItem>
-              <SelectItem value="SORE">Sore</SelectItem>
+              {kelompoks.map((k) => <SelectItem key={k.id} value={k.id}>Kelompok {k.nama}</SelectItem>)}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">Semua santri pada sesi {selectedSesi === "PAGI" ? "pagi" : selectedSesi === "SORE" ? "sore" : "terpilih"} akan muncul</p>
         </div>
         <div className="space-y-2">
           <Label>Santri ({santris.length})</Label>
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-3" placeholder="Cari nama santri..." disabled={!selectedSesi} />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-3" placeholder="Cari nama santri..." disabled={!selectedKelompok} />
         </div>
       </div>
 
-      {selectedSesi && !selectedSantri && (
+      {selectedKelompok && !selectedSantri && (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="max-h-72 overflow-y-auto">
             {filteredSantris.length === 0 ? (
               <div className="p-5 text-center text-sm text-muted-foreground sm:p-8">
-                Tidak ada santri pada sesi ini
+                Tidak ada santri pada kelompok ini
               </div>
             ) : (
               filteredSantris.map((s) => (
@@ -282,25 +352,23 @@ export default function PerkembanganPage() {
 
       {selectedSantri ? (
         <Tabs defaultValue="bacaan" className="w-full">
-           <TabsList className="grid min-h-12 h-auto w-full grid-cols-3">
-             <TabsTrigger value="bacaan" className="gap-1 px-1 text-xs sm:text-sm"><BookOpen className="h-4 w-4" /> Bacaan</TabsTrigger>
-             <TabsTrigger value="hafalan" className="gap-1 px-1 text-xs sm:text-sm"><BookMarked className="h-4 w-4" /> Hafalan</TabsTrigger>
-             <TabsTrigger value="sholat" className="gap-1 px-1 text-xs sm:text-sm"><Moon className="h-4 w-4" /> Praktik Sholat</TabsTrigger>
+          <TabsList className="grid min-h-12 h-auto w-full grid-cols-3">
+            <TabsTrigger value="bacaan" className="gap-1 px-1 text-xs sm:text-sm"><BookOpen className="h-4 w-4" /> Bacaan</TabsTrigger>
+            <TabsTrigger value="hafalan" className="gap-1 px-1 text-xs sm:text-sm"><BookMarked className="h-4 w-4" /> Hafalan</TabsTrigger>
+            <TabsTrigger value="sholat" className="gap-1 px-1 text-xs sm:text-sm"><Moon className="h-4 w-4" /> Praktik Salat</TabsTrigger>
           </TabsList>
 
           <TabsContent value="bacaan" className="space-y-4 pt-4">
             <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">Perkembangan Bacaan</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-sm font-medium">Perkembangan Bacaan</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Jenis Bacaan</Label>
-                  <Select value={jenisBacaan} onValueChange={(v: string | null) => v && setJenisBacaan(v)} items={[{ label: "Iqra", value: "IQRA" }, { label: "Al-Quran", value: "QURAN" }]}>
+                  <Select value={jenisBacaan} onValueChange={(v) => v && setJenisBacaan(v)} items={[{ label: "Iqra", value: "IQRA" }, { label: "Al-Qur&apos;an", value: "QURAN" }]}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="IQRA">Iqra</SelectItem>
-                      <SelectItem value="QURAN">Al-Quran</SelectItem>
+                      <SelectItem value="QURAN">Al-Qur&apos;an</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -308,55 +376,62 @@ export default function PerkembanganPage() {
                 {jenisBacaan === "IQRA" ? (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Iqra Ke-</Label>
-                      <Select value={iqraForm.iqra_ke} onValueChange={(v: string | null) => setIqraForm({ ...iqraForm, iqra_ke: v ?? "" })} items={IQRA_OPTIONS.map(n => ({ label: `Iqra ${n}`, value: String(n) }))}>
+                      <Label>Jilid</Label>
+                      <Select value={iqraJilid} onValueChange={(v) => setIqraJilid(v ?? "")} items={[1,2,3,4,5,6].map((n) => ({ label: `Jilid ${n}`, value: String(n) }))}>
                         <SelectTrigger className="h-9"><SelectValue placeholder="Pilih" /></SelectTrigger>
                         <SelectContent>
-                          {IQRA_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Iqra {n}</SelectItem>)}
+                          {[1,2,3,4,5,6].map((n) => <SelectItem key={n} value={String(n)}>Jilid {n}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label>Halaman</Label>
-                      <Input type="number" value={iqraForm.halaman} onChange={(e) => setIqraForm({ ...iqraForm, halaman: e.target.value })} className="h-9" placeholder="Nomor halaman" />
+                      <Input type="number" value={iqraHalaman} onChange={(e) => setIqraHalaman(e.target.value)} className="h-9" placeholder="Nomor halaman" />
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Juz</Label>
-                      <Select value={quranForm.juz} onValueChange={(v: string | null) => setQuranForm({ ...quranForm, juz: v ?? "" })} items={JUZ_OPTIONS.map(n => ({ label: `Juz ${n}`, value: String(n) }))}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Pilih juz" /></SelectTrigger>
-                        <SelectContent>
-                          {JUZ_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Juz {n}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Surah</Label>
+                        <Select value={quranSuratId} onValueChange={(v) => setQuranSuratId(v ?? "")} items={surats.map((s) => ({ label: s.nama, value: s.id }))}>
+                          <SelectTrigger className="h-9"><SelectValue placeholder="Pilih surah" /></SelectTrigger>
+                          <SelectContent className="max-h-64">
+                            {surats.map((s) => <SelectItem key={s.id} value={s.id}>{s.nama}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Juz</Label>
+                        <Input type="number" value={quranJuz} onChange={(e) => setQuranJuz(e.target.value)} className="h-9" placeholder="Juz 1-30" />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Surah</Label>
-                      <Input value={quranForm.surah} onChange={(e) => setQuranForm({ ...quranForm, surah: e.target.value })} className="h-9" placeholder="Ketik nama surah" list="surah-list" />
-                      <datalist id="surah-list">
-                        {SURAH_LIST.map(s => <option key={s} value={s} />)}
-                      </datalist>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Ayat Mulai</Label>
+                        <Input type="number" value={quranAyatMulai} onChange={(e) => setQuranAyatMulai(e.target.value)} className="h-9" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Ayat Selesai</Label>
+                        <Input type="number" value={quranAyatSelesai} onChange={(e) => setQuranAyatSelesai(e.target.value)} className="h-9" />
+                      </div>
                     </div>
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <Label>Penilaian</Label>
-                  <Select value={penilaianBacaan} onValueChange={(v: string | null) => v && setPenilaianBacaan(v)} items={PENILAIAN_OPTIONS}>
+                  <Label>Status</Label>
+                  <Select value={statusBacaan} onValueChange={(v) => v && setStatusBacaan(v)} items={BAC_SURAT_STATUS}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {PENILAIAN_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      {BAC_SURAT_STATUS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Catatan (Opsional)</Label>
                   <Textarea value={catatanBacaan} onChange={(e) => setCatatanBacaan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
-
                 <Button onClick={handleSaveBacaan} disabled={saving} className="h-9 px-4">
                   {saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
                 </Button>
@@ -366,33 +441,68 @@ export default function PerkembanganPage() {
 
           <TabsContent value="hafalan" className="space-y-4 pt-4">
             <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">Perkembangan Hafalan</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-sm font-medium">Perkembangan Hafalan</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Nama Surah / Doa</Label>
-                  <Input value={hafalanForm.nama_surah} onChange={(e) => setHafalanForm({ ...hafalanForm, nama_surah: e.target.value })} className="h-9" placeholder="Contoh: Al-Fatihah, Doa Sebelum Makan" list="surah-hafalan-list" />
-                  <datalist id="surah-hafalan-list">
-                    {SURAH_LIST.map(s => <option key={s} value={s} />)}
-                  </datalist>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Penilaian</Label>
-                  <Select value={hafalanForm.penilaian} onValueChange={(v: string | null) => v && setHafalanForm({ ...hafalanForm, penilaian: v })} items={PENILAIAN_OPTIONS}>
+                  <Label>Jenis Hafalan</Label>
+                  <Select value={jenisHafalan} onValueChange={(v) => setJenisHafalan(v ?? "SURAT")} items={[{ label: "Hafalan Surat", value: "SURAT" }, { label: "Hafalan Doa", value: "DOA" }]}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {PENILAIAN_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      <SelectItem value="SURAT">Hafalan Surat</SelectItem>
+                      <SelectItem value="DOA">Hafalan Doa</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
+                {jenisHafalan === "SURAT" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Surah (Juz 30 + Al-Fatihah)</Label>
+                      <SearchableSelect
+                        value={suratId}
+                        onChange={setSuratId}
+                        placeholder="Pilih surah"
+                        options={surats.map((s) => ({ value: s.id, label: `${s.nama} (${s.jumlah_ayat} ayat)` }))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Mulai dari ayat</Label>
+                        <Input value={ayatMulai} className="h-9" disabled placeholder="Otomatis" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Sudah hafal sampai ayat</Label>
+                        <Input type="number" value={ayatSelesai} onChange={(e) => setAyatSelesai(e.target.value)} className="h-9" placeholder="Ayat terakhir" />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Doa Harian</Label>
+                    <SearchableSelect
+                      value={doaId}
+                      onChange={setDoaId}
+                      placeholder="Pilih doa"
+                      options={doas.map((d) => ({ value: d.id, label: d.nama }))}
+                    />
+                  </div>
+                )}
+
+                {errorMsg && <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
+
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={statusHafalan} onValueChange={(v) => v && setStatusHafalan(v)} items={BAC_SURAT_STATUS}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {BAC_SURAT_STATUS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2">
                   <Label>Catatan (Opsional)</Label>
-                  <Textarea value={hafalanForm.catatan} onChange={(e) => setHafalanForm({ ...hafalanForm, catatan: e.target.value })} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
+                  <Textarea value={catatanHafalan} onChange={(e) => setCatatanHafalan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
-
                 <Button onClick={handleSaveHafalan} disabled={saving} className="h-9 px-4">
                   {saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
                 </Button>
@@ -402,35 +512,54 @@ export default function PerkembanganPage() {
 
           <TabsContent value="sholat" className="space-y-4 pt-4">
             <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">Praktik Sholat</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-sm font-medium">Praktik Salat</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Jenis Sholat</Label>
-                  <Select value={sholatForm.jenis_sholat} onValueChange={(v: string | null) => v && setSholatForm({ ...sholatForm, jenis_sholat: v })} items={SHOLAT_OPTIONS.map(s => ({ label: s, value: s }))}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {SHOLAT_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div>
+                  <Label>Komponen Salat (Level 1)</Label>
+                  <div className="mt-2 space-y-2">
+                    {komponens.map((k) => (
+                      <div key={k.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                        <span className="text-sm font-medium text-foreground">{k.nama}</span>
+                        <div className="flex gap-1.5">
+                          {KURANG_STATUS.map((st) => (
+                            <button
+                              key={st.value}
+                              type="button"
+                              onClick={() => setKomponenStatus((prev) => ({ ...prev, [k.id]: prev[k.id] === st.value ? "" : st.value }))}
+                              className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${komponenStatus[k.id] === st.value ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+                            >
+                              {st.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Penilaian</Label>
-                  <Select value={sholatForm.penilaian} onValueChange={(v: string | null) => v && setSholatForm({ ...sholatForm, penilaian: v })} items={PENILAIAN_OPTIONS}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PENILAIAN_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Jenis Salat (Level 2)</Label>
+                    <Select value={jenisSalatId} onValueChange={(v) => setJenisSalatId(v ?? "")} items={jenisSalats.map((s) => ({ label: s.nama, value: s.id }))}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Pilih salat" /></SelectTrigger>
+                      <SelectContent>
+                        {jenisSalats.map((s) => <SelectItem key={s.id} value={s.id}>{s.nama}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Status Praktik</Label>
+                    <Select value={statusSholat} onValueChange={(v) => v && setStatusSholat(v)} items={KURANG_STATUS}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {KURANG_STATUS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Catatan (Opsional)</Label>
-                  <Textarea value={sholatForm.catatan} onChange={(e) => setSholatForm({ ...sholatForm, catatan: e.target.value })} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
+                  <Textarea value={catatanSholat} onChange={(e) => setCatatanSholat(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
-
                 <Button onClick={handleSaveSholat} disabled={saving} className="h-9 px-4">
                   {saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
                 </Button>
@@ -438,7 +567,7 @@ export default function PerkembanganPage() {
             </Card>
           </TabsContent>
         </Tabs>
-      ) : selectedSesi ? (
+      ) : selectedKelompok ? (
         <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
           <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
           <p className="text-sm text-muted-foreground">Pilih santri untuk mulai input perkembangan</p>
