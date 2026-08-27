@@ -18,8 +18,8 @@ interface Santri {
   nama_ayah: string | null;
   nama_ibu: string | null;
   no_hp_wali: string | null;
-  sesi: string | null;
   keterangan: string | null;
+  kelompok?: { nama: string; sesi?: { nama: string } | null } | null;
 }
 
 export default function AnakPage() {
@@ -31,10 +31,12 @@ export default function AnakPage() {
   useEffect(() => {
     const fetchData = async () => {
       if (!user) return;
-      const { data: orangTua } = await supabase.from("orang_tuas").select("santri_id").eq("user_id", user.id).single();
-      if (!orangTua) { setLoading(false); return; }
-      const { data } = await supabase.from("santris").select("*").eq("id", orangTua.santri_id).single();
-      setSantri(data);
+      const { data } = await supabase
+        .from("santri")
+        .select("*, kelompok(nama, sesi(nama))")
+        .eq("profile_id", user.id)
+        .single();
+      setSantri((data ?? null) as unknown as Santri | null);
       setLoading(false);
     };
     fetchData();
@@ -48,8 +50,11 @@ export default function AnakPage() {
     </div>
   );
 
+  const sesi = santri.kelompok?.sesi?.nama === "PAGI" ? "PAGI" : santri.kelompok?.sesi?.nama === "SORE" ? "SORE" : "";
+
   const schoolInfo = [
-    { label: "Sesi", value: formatSesi(santri.sesi ?? ""), icon: Clock },
+    { label: "Sesi", value: formatSesi(sesi), icon: Clock },
+    { label: "Kelompok", value: santri.kelompok?.nama ?? "-", icon: Users },
     { label: "Jenis Bacaan", value: formatTingkat(santri.keterangan ?? ""), icon: CalendarDays },
     { label: "Jenis Kelamin", value: formatGender(santri.jenis_kelamin), icon: User },
   ];
