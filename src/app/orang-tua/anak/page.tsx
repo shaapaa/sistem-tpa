@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { User, Calendar, Clock, Phone, MapPin, Users, CalendarDays, UserX } from "lucide-react";
+import { User, Calendar, Clock, Phone, MapPin, Users, CalendarDays, Wallet, GraduationCap, Briefcase, UserX } from "lucide-react";
 import { formatGender, formatSesi, formatTingkat, formatDate } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -18,7 +18,11 @@ interface Santri {
   nama_ayah: string | null;
   nama_ibu: string | null;
   no_hp_wali: string | null;
+  pekerjaan_ayah: string | null;
+  pekerjaan_ibu: string | null;
+  iuran: number | null;
   keterangan: string | null;
+  pendidikan_saat_ini: string | null;
   kelompok?: { nama: string; sesi?: { nama: string } | null } | null;
 }
 
@@ -51,19 +55,28 @@ export default function AnakPage() {
   );
 
   const sesi = santri.kelompok?.sesi?.nama === "PAGI" ? "PAGI" : santri.kelompok?.sesi?.nama === "SORE" ? "SORE" : "";
+  const formatIuran = (n: number | null) => (n ? `Rp ${n.toLocaleString("id-ID")}` : "-");
 
   const schoolInfo = [
     { label: "Sesi", value: formatSesi(sesi), icon: Clock },
     { label: "Kelompok", value: santri.kelompok?.nama ?? "-", icon: Users },
     { label: "Jenis Bacaan", value: formatTingkat(santri.keterangan ?? ""), icon: CalendarDays },
-    { label: "Jenis Kelamin", value: formatGender(santri.jenis_kelamin), icon: User },
+    { label: "Pendidikan Saat Ini", value: santri.pendidikan_saat_ini ?? "-", icon: GraduationCap },
   ];
 
   const personalInfo = [
+    { label: "Jenis Kelamin", value: formatGender(santri.jenis_kelamin), icon: User },
     { label: "Tanggal Lahir", value: santri.tanggal_lahir ? formatDate(santri.tanggal_lahir) : "-", icon: Calendar },
-    { label: "No. HP Wali", value: santri.no_hp_wali ?? "-", icon: Phone },
+    { label: "Alamat", value: santri.alamat ?? "-", icon: MapPin },
+    { label: "Iuran/Infaq Bulanan", value: formatIuran(santri.iuran), icon: Wallet },
+  ];
+
+  const parentInfo = [
     { label: "Nama Ayah", value: santri.nama_ayah ?? "-", icon: Users },
+    { label: "Pekerjaan Ayah", value: santri.pekerjaan_ayah ?? "-", icon: Briefcase },
     { label: "Nama Ibu", value: santri.nama_ibu ?? "-", icon: Users },
+    { label: "Pekerjaan Ibu", value: santri.pekerjaan_ibu ?? "-", icon: Briefcase },
+    { label: "No. HP Wali", value: santri.no_hp_wali ?? "-", icon: Phone },
   ];
 
   return (
@@ -80,7 +93,7 @@ export default function AnakPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Informasi Sekolah</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Informasi Kelas</h3>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               {schoolInfo.map((d) => {
                 const Icon = d.icon;
@@ -119,19 +132,25 @@ export default function AnakPage() {
             </div>
           </div>
 
-          {santri.alamat && (
-            <div className="border-t border-border pt-6">
-              <div className="flex items-start gap-2.5">
-                <div className="mt-0.5 h-8 w-8 shrink-0 flex items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <MapPin className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Alamat</div>
-                  <div className="font-medium text-foreground text-sm mt-0.5">{santri.alamat}</div>
-                </div>
-              </div>
+          <div className="border-t border-border pt-6">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Informasi Orang Tua</h3>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {parentInfo.map((d) => {
+                const Icon = d.icon;
+                return (
+                  <div key={d.label} className="flex items-start gap-2.5">
+                    <div className="mt-0.5 h-8 w-8 shrink-0 flex items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">{d.label}</div>
+                      <div className="font-medium text-foreground text-sm mt-0.5">{d.value}</div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
     </div>
