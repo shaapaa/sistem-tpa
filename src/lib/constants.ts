@@ -1,4 +1,4 @@
-export const roles = ["ADMIN", "PENGAJAR", "ORANG_TUA"] as const;
+export const roles = ["ADMIN", "PENGAJAR", "SANTRI"] as const;
 export type Role = (typeof roles)[number];
 
 export interface NavItem {
@@ -11,8 +11,9 @@ export const adminNav: NavItem[] = [
   { label: "Dashboard", href: "/admin", iconName: "LayoutDashboard" },
   { label: "Santri", href: "/admin/santri", iconName: "Users" },
   { label: "Pengajar", href: "/admin/pengajar", iconName: "GraduationCap" },
+  { label: "Kelompok", href: "/admin/kelompok", iconName: "BookOpen" },
   { label: "Jadwal", href: "/admin/jadwal", iconName: "Calendar" },
-  { label: "Users", href: "/admin/users", iconName: "UserCog" },
+  { label: "Profil & Akun", href: "/admin/users", iconName: "UserCog" },
 ];
 
 export const pengajarNav: NavItem[] = [

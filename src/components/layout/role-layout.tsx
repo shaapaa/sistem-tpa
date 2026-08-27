@@ -9,7 +9,7 @@ export function RoleLayout({
   role,
 }: {
   children: React.ReactNode;
-  role: "ADMIN" | "PENGAJAR" | "ORANG_TUA";
+  role: "ADMIN" | "PENGAJAR" | "SANTRI";
 }) {
   const { profile, loading } = useAuth();
   const router = useRouter();

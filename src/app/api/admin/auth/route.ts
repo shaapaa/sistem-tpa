@@ -15,7 +15,7 @@ async function isAdmin() {
   const supabase = await createAnonServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return false
-  const { data } = await supabase.from("users").select("role").eq("id", user.id).single()
+  const { data } = await supabase.from("profiles").select("role").eq("id", user.id).single()
   return data?.role === "ADMIN"
 }
 

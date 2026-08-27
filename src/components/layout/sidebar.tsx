@@ -77,7 +77,7 @@ export function Sidebar() {
       </div>
       <div className="border-t border-sidebar-border p-4 space-y-3">
         <div className="px-3">
-          <div className="text-sm font-medium text-sidebar-foreground truncate">{profile?.username}</div>
+          <div className="text-sm font-medium text-sidebar-foreground truncate">{profile?.nama}</div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-[oklch(0.72_0.025_92)]">{profile?.role?.toLowerCase()}</div>
         </div>
         <button

@@ -34,7 +34,8 @@ export const iconMap: Record<string, React.ComponentType<{ className?: string }>
 export function navItemsForRole(role: Role | undefined): NavItem[] {
   if (role === "ADMIN") return adminNav
   if (role === "PENGAJAR") return pengajarNav
-  return orangTuaNav
+  if (role === "SANTRI") return orangTuaNav
+  return []
 }
 
 export function isNavItemActive(pathname: string, href: string): boolean {

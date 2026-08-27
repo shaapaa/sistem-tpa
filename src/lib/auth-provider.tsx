@@ -6,8 +6,8 @@ import type { User } from "@supabase/supabase-js";
 
 interface UserProfile {
   id: string;
-  username: string;
-  role: "ADMIN" | "PENGAJAR" | "ORANG_TUA";
+  nama: string;
+  role: "ADMIN" | "PENGAJAR" | "SANTRI";
 }
 
 interface AuthContextType {
@@ -39,8 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (user) {
         const { data } = await supabase
-          .from("users")
-          .select("id, username, role")
+          .from("profiles")
+          .select("id, nama, role")
           .eq("id", user.id)
           .single();
         setProfile(data);
@@ -57,8 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (session?.user) {
           const { data } = await supabase
-            .from("users")
-            .select("id, username, role")
+            .from("profiles")
+            .select("id, nama, role")
             .eq("id", session.user.id)
             .single();
           setProfile(data);
