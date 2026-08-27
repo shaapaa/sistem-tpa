@@ -1,114 +1,305 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/page-header"
 import { MetricRail } from "@/components/layout/metric-rail"
 import { SectionHeader } from "@/components/layout/section-header"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { DatePicker } from "@/components/ui/date-picker"
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts"
+import { Users, BookOpen, AlertTriangle, Activity, CalendarCheck, CalendarX } from "lucide-react"
+import { formatHari, formatTime } from "@/lib/format"
 
-interface Stats { santri: number; pengajar: number; jadwal: number; hadir: number; izin: number; sakit: number; alpha: number }
-const COLORS = ["#376b59", "#b58b4b", "#b85b4b", "#768078"]
+const ATT_COLORS = ["#376b59", "#b58b4b", "#b85b4b", "#768078"]
+const PERIODS = [
+  { label: "Hari ini", value: "today" },
+  { label: "Minggu ini", value: "week" },
+  { label: "Bulan ini", value: "month" },
+  { label: "Custom", value: "custom" },
+]
 
-function renderAttendanceLabel({ name, value, x, y, textAnchor, viewBox }: {
-  name?: string
-  value?: number
-  x?: number
-  y?: number
-  textAnchor?: "start" | "middle" | "end" | "inherit"
-  viewBox?: { width?: number }
-}) {
-  const fontSize = Math.max(9, Math.min(12, (viewBox?.width ?? 320) / 30))
-  return <text x={x} y={y} textAnchor={textAnchor} fill="#26352e" fontSize={fontSize} fontWeight={600}>{name} {value}</text>
-}
+type PresensiRow = { status: string; santri_id: string; tanggal: string | null; kelompok_id: string | null; kelompok?: { sesi?: { nama: string } | null } | null }
+type JadwalRow = { hari: string; jam_mulai: string; jam_selesai: string; kelompok?: { nama: string; sesi?: { nama: string } | null; pengajar?: { nama: string } | null } | null }
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<Stats>({ santri: 0, pengajar: 0, jadwal: 0, hadir: 0, izin: 0, sakit: 0, alpha: 0 })
-  const [attendanceData, setAttendanceData] = useState<{ name: string; value: number }[]>([])
+  const [santriCount, setSantriCount] = useState(0)
+  const [pengajarCount, setPengajarCount] = useState(0)
+  const [sesiPagi, setSesiPagi] = useState(0)
+  const [sesiSore, setSesiSore] = useState(0)
+  const [presensi, setPresensi] = useState<PresensiRow[]>([])
+  const [jadwals, setJadwals] = useState<JadwalRow[]>([])
+  const [attention, setAttention] = useState<{ nama: string; reason: string; sesi: string }[]>([])
+  const [monthPerk, setMonthPerk] = useState(0)
+  const [monthPresensi, setMonthPresensi] = useState(0)
+
+  const [period, setPeriod] = useState("month")
+  const [customFrom, setCustomFrom] = useState("")
+  const [customTo, setCustomTo] = useState("")
+  const [sesiFilter, setSesiFilter] = useState("ALL")
+
   const supabase = createClient()
 
   useEffect(() => {
-    const fetchStats = async () => {
-      const [santri, pengajar, jadwal, absensi] = await Promise.all([
-        supabase.from("santris").select("id", { count: "exact", head: true }),
-        supabase.from("pengajars").select("id", { count: "exact", head: true }),
-        supabase.from("jadwals").select("id", { count: "exact", head: true }),
-        supabase.from("absensis").select("status"),
+    const fetchData = async () => {
+      const monthStart = currentMonthStart()
+      const [santriC, pengajarC, santriList, presensiRes, jadwalRes, bacaanRes, cicilanRes, doaRes, salatRes] = await Promise.all([
+        supabase.from("santri").select("id", { count: "exact", head: true }),
+        supabase.from("pengajar").select("id", { count: "exact", head: true }),
+        supabase.from("santri").select("id, nama, kelompok(sesi(nama))"),
+        supabase.from("presensi").select("status, santri_id, tanggal, kelompok_id, kelompok(sesi(nama))"),
+        supabase.from("jadwal").select("hari, jam_mulai, jam_selesai, kelompok(nama, sesi(nama), pengajar(nama))"),
+        supabase.from("perkembangan_bacaan").select("santri_id, status, tanggal").eq("status", "TIDAK_LANCAR"),
+        supabase.from("hafalan_surat_cicilan").select("hafalan_santri_id, status, tanggal, hafalan_santri(santri_id)").eq("status", "TIDAK_LANCAR"),
+        supabase.from("perkembangan_hafalan_doa").select("santri_id, status, tanggal").eq("status", "TIDAK_LANCAR"),
+        supabase.from("praktik_salat").select("santri_id, status, tanggal").eq("status", "BUTUH_BIMBINGAN"),
       ])
-      const rows = absensi.data ?? []
-      const next = {
-        santri: santri.count ?? 0, pengajar: pengajar.count ?? 0, jadwal: jadwal.count ?? 0,
-        hadir: rows.filter((a) => a.status === "HADIR").length,
-        izin: rows.filter((a) => a.status === "IZIN").length,
-        sakit: rows.filter((a) => a.status === "SAKIT").length,
-        alpha: rows.filter((a) => a.status === "ALPHA").length,
-      }
-      setStats(next)
-      setAttendanceData([{ name: "Hadir", value: next.hadir }, { name: "Izin", value: next.izin }, { name: "Sakit", value: next.sakit }, { name: "Alpha", value: next.alpha }])
+
+      setSantriCount(santriC.count ?? 0)
+      setPengajarCount(pengajarC.count ?? 0)
+      type SantriRow = { id: string; nama: string; kelompok?: { sesi?: { nama: string } | null } | null }
+      type BacaanRow = { santri_id: string; status: string | null; tanggal: string }
+      type CicilanRow = { santri_id?: string; status: string | null; tanggal: string; hafalan_santri?: { santri_id: string } | null }
+      type DoaRow = { santri_id: string; status: string | null; tanggal: string }
+      type SalatRow = { santri_id: string; status: string | null; tanggal: string }
+      const santris = (santriList.data ?? []) as unknown as SantriRow[]
+      setSesiPagi(santris.filter((s) => s.kelompok?.sesi?.nama === "PAGI").length)
+      setSesiSore(santris.filter((s) => s.kelompok?.sesi?.nama === "SORE").length)
+      setPresensi((presensiRes.data ?? []) as unknown as PresensiRow[])
+      setJadwals((jadwalRes.data ?? []) as unknown as JadwalRow[])
+
+      // Month activity
+      const bacaanRows = (bacaanRes.data ?? []) as unknown as BacaanRow[]
+      const cicilanRows = (cicilanRes.data ?? []) as unknown as CicilanRow[]
+      const doaRows = (doaRes.data ?? []) as unknown as DoaRow[]
+      const salatRows = (salatRes.data ?? []) as unknown as SalatRow[]
+      const perkCount =
+        bacaanRows.filter((r) => r.tanggal >= monthStart).length +
+        cicilanRows.filter((r) => r.tanggal >= monthStart).length +
+        doaRows.filter((r) => r.tanggal >= monthStart).length +
+        salatRows.filter((r) => r.tanggal >= monthStart).length
+      setMonthPerk(perkCount)
+      setMonthPresensi((presensiRes.data ?? [] as unknown as PresensiRow[]).filter((r) => r.tanggal && r.tanggal >= monthStart).length)
+
+      // Attention: alpha >= 2 this month
+      const alphaCount: Record<string, number> = {}
+      ;((presensiRes.data ?? []) as unknown as PresensiRow[]).forEach((r) => {
+        if (r.status === "ALPHA" && r.tanggal && r.tanggal >= monthStart && r.santri_id) {
+          alphaCount[r.santri_id] = (alphaCount[r.santri_id] ?? 0) + 1
+        }
+      })
+      const reasons: Record<string, string> = {}
+      const addReason = (id: string, reason: string) => { if (!reasons[id]) reasons[id] = reason }
+      bacaanRows.forEach((r) => addReason(r.santri_id, "Perkembangan bacaan dinilai Tidak Lancar"))
+      cicilanRows.forEach((r) => { const sid = r.hafalan_santri?.santri_id; if (sid) addReason(sid, "Hafalan dinilai Tidak Lancar") })
+      doaRows.forEach((r) => addReason(r.santri_id, "Hafalan doa dinilai Tidak Lancar"))
+      salatRows.forEach((r) => addReason(r.santri_id, "Praktik salat membutuhkan bimbingan"))
+
+      const attList: { nama: string; reason: string; sesi: string }[] = []
+      santris.forEach((s) => {
+        const reason = reasons[s.id] ?? (alphaCount[s.id] && alphaCount[s.id] >= 2 ? `${alphaCount[s.id]}x tidak hadir (alpha) bulan ini` : null)
+        if (reason) {
+          attList.push({ nama: s.nama, reason, sesi: s.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : s.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-" })
+        }
+      })
+      setAttention(attList)
     }
-    fetchStats()
+    fetchData()
   }, [])
 
-  const totalAttendance = stats.hadir + stats.izin + stats.sakit + stats.alpha
-  const rate = totalAttendance ? Math.round((stats.hadir / totalAttendance) * 100) : 0
+  const range = useMemo(() => {
+    const now = new Date()
+    let from = ""
+    let to = ""
+    if (period === "today") { from = iso(now); to = iso(now) }
+    else if (period === "week") { const d = new Date(now); d.setDate(now.getDate() - ((now.getDay() + 6) % 7)); from = iso(d); to = iso(now) }
+    else if (period === "month") { from = currentMonthStart(); to = iso(now) }
+    else if (period === "custom") { from = customFrom; to = customTo }
+    return { from, to }
+  }, [period, customFrom, customTo])
+
+  const att = useMemo(() => {
+    const a = { hadir: 0, izin: 0, sakit: 0, alpha: 0 }
+    presensi.forEach((row) => {
+      const t = row.tanggal
+      if (!t) return
+      if (sesiFilter !== "ALL" && row.kelompok?.sesi?.nama !== sesiFilter) return
+      if (range.from && t < range.from) return
+      if (range.to && t > range.to) return
+      if (row.status === "HADIR") a.hadir++
+      else if (row.status === "IZIN") a.izin++
+      else if (row.status === "SAKIT") a.sakit++
+      else if (row.status === "ALPHA") a.alpha++
+    })
+    return a
+  }, [presensi, range, sesiFilter])
+
+  const totalAtt = att.hadir + att.izin + att.sakit + att.alpha
+  const rate = totalAtt ? Math.round((att.hadir / totalAtt) * 100) : 0
+  const attData = [
+    { name: "Hadir", value: att.hadir },
+    { name: "Izin", value: att.izin },
+    { name: "Sakit", value: att.sakit },
+    { name: "Alpha", value: att.alpha },
+  ].filter((d) => d.value > 0)
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="TPA Baitul Yatama" title="Ringkasan hari ini" description="Data utama Baitul Yatama dalam satu pandangan." />
+      <PageHeader eyebrow="TPA Baitul Yatama" title="Dashboard monitoring" description="Ringkasan operasional dan evaluasi seluruh TPA." />
       <MetricRail items={[
-        { label: "Santri", value: stats.santri, detail: "santri aktif", href: "/admin/santri", tone: "primary" },
-        { label: "Pengajar", value: stats.pengajar, detail: "pengajar terdaftar", href: "/admin/pengajar" },
-        { label: "Jadwal", value: stats.jadwal, detail: "jadwal terisi", href: "/admin/jadwal" },
+        { label: "Santri Aktif", value: santriCount, detail: "seluruh santri", href: "/admin/santri", tone: "primary" },
+        { label: "Pengajar Aktif", value: pengajarCount, detail: "pengajar terdaftar", href: "/admin/pengajar" },
+        { label: "Sesi Pagi", value: sesiPagi, detail: "santri sesi pagi", href: "/admin/santri" },
+        { label: "Sesi Sore", value: sesiSore, detail: "santri sesi sore", href: "/admin/santri" },
       ]} />
-      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+
+      <div className="surface-panel p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">Periode</Label>
+            <Select value={period} onValueChange={(v) => v && setPeriod(v)} items={PERIODS}>
+              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PERIODS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {period === "custom" && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Dari</Label>
+                <DatePicker value={customFrom} onChange={setCustomFrom} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Sampai</Label>
+                <DatePicker value={customTo} onChange={setCustomTo} />
+              </div>
+            </>
+          )}
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">Sesi</Label>
+            <Select value={sesiFilter} onValueChange={(v) => v && setSesiFilter(v)} items={[{ label: "Semua", value: "ALL" }, { label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
+              <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Semua</SelectItem>
+                <SelectItem value="PAGI">Pagi</SelectItem>
+                <SelectItem value="SORE">Sore</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      <section>
+        <SectionHeader title="Ringkasan kehadiran" description={`Periode: ${periodLabel(period)} · Sesi: ${sesiFilter === "ALL" ? "Semua" : sesiFilter === "PAGI" ? "Pagi" : "Sore"}`} />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            { label: "Hadir", value: att.hadir, color: "text-primary", bg: "bg-primary/10", icon: CalendarCheck },
+            { label: "Izin", value: att.izin, color: "text-amber-700", bg: "bg-amber-100", icon: CalendarX },
+            { label: "Sakit", value: att.sakit, color: "text-amber-700", bg: "bg-amber-100", icon: Activity },
+            { label: "Alpha", value: att.alpha, color: "text-destructive", bg: "bg-red-100", icon: CalendarX },
+            { label: "Persentase", value: `${rate}%`, color: "text-primary", bg: "bg-primary/10", icon: Users },
+          ].map((c) => (
+            <div key={c.label} className="rounded-lg border border-border p-4">
+              <div className={`mb-2 inline-flex rounded-md p-1.5 ${c.bg} ${c.color}`}><c.icon className="h-4 w-4" /></div>
+              <p className="font-mono text-2xl font-semibold tracking-[-0.04em] text-foreground">{c.value}</p>
+              <p className="text-xs text-muted-foreground">{c.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
         <section className="surface-panel min-w-0 overflow-hidden p-5 sm:p-6">
-          <SectionHeader title="Distribusi kehadiran" description="Seluruh catatan presensi tersimpan" />
-          {totalAttendance ? <>
-            <div className="mt-4 h-[240px] w-full min-w-0">
+          <SectionHeader title="Distribusi kehadiran" description="Periode dan sesi terpilih" />
+          {totalAtt ? (
+            <div className="h-[220px] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                  <PieChart margin={{ top: 8, right: 42, bottom: 8, left: 42 }}>
-                  <Pie
-                    data={attendanceData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="38%"
-                    outerRadius="58%"
-                    paddingAngle={3}
-                    dataKey="value"
-                    stroke="none"
-                    label={renderAttendanceLabel}
-                    labelLine={{ stroke: "#768078", strokeWidth: 1 }}
-                  >
-                    {attendanceData.map((entry, index) => <Cell key={entry.name} style={{ fill: COLORS[index] }} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
+                <PieChart><Pie data={attData} cx="50%" cy="50%" innerRadius="42%" outerRadius="62%" paddingAngle={3} dataKey="value" stroke="none" label={({ name, value }) => `${name} ${value}`} labelLine={false} style={{ fontSize: 10, fontWeight: 600, fill: "#26352e" }}>{attData.map((e, i) => <Cell key={e.name} style={{ fill: ATT_COLORS[i] }} />)}</Pie><Tooltip /></PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-4 border-t border-border/60 pt-4 text-xs text-muted-foreground">
-              {attendanceData.map((item, index) => <div key={item.name} className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[index] }} />{item.name}</div>)}
+          ) : <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">Belum ada data kehadiran pada periode ini</div>}
+          <div className="mt-4 border-t border-border/60 pt-4">
+            <div className="flex items-end justify-between"><span className="text-sm text-muted-foreground">Tingkat kehadiran</span><strong className="font-mono text-2xl tracking-[-0.06em] text-primary">{rate}%</strong></div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${rate}%` }} /></div>
+          </div>
+        </section>
+        <section className="surface-panel min-w-0 overflow-hidden p-5 sm:p-6">
+          <SectionHeader title="Jadwal kelompok" description="Hari, kelompok, dan pengajar" />
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium">Hari</th>
+                  <th className="py-2 pr-3 font-medium">Jam</th>
+                  <th className="py-2 pr-3 font-medium">Kelompok</th>
+                  <th className="py-2 font-medium">Pengajar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jadwals.length === 0 ? (
+                  <tr><td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">Belum ada jadwal</td></tr>
+                ) : (
+                  jadwals.map((j, i) => (
+                    <tr key={i} className="border-b border-border/50 last:border-0">
+                      <td className="py-2.5 pr-3">{formatHari(j.hari)}</td>
+                      <td className="py-2.5 pr-3 font-tabular text-muted-foreground">{formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}</td>
+                      <td className="py-2.5 pr-3">{j.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : j.kelompok?.sesi?.nama === "SORE" ? "Sore" : ""} · K{j.kelompok?.nama}</td>
+                      <td className="py-2.5 font-medium">{j.kelompok?.pengajar?.nama ?? "-"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="surface-panel min-w-0 p-5 sm:p-6">
+          <SectionHeader title="Santri butuh perhatian" description="Penilaian kurang atau kehadiran yang perlu ditindaklanjuti." />
+          {attention.length === 0 ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><Activity className="h-4 w-4" /> Semua santri dalam kondisi baik</div>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {attention.map((a, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-lg border border-border px-4 py-3">
+                  <div className="rounded-md bg-amber-100 p-1.5 text-amber-700"><AlertTriangle className="h-4 w-4" /></div>
+                  <div>
+                    <p className="font-medium text-foreground">{a.nama} <span className="text-xs text-muted-foreground">({a.sesi})</span></p>
+                    <p className="text-sm text-muted-foreground">{a.reason}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          </> : <div className="flex h-[280px] flex-col items-center justify-center text-center text-sm text-muted-foreground"><p>Belum ada catatan kehadiran</p><p className="mt-1 text-xs">Data akan muncul setelah presensi pertama dicatat.</p></div>}
+          )}
         </section>
         <section className="surface-panel min-w-0 p-5 sm:p-6">
-          <SectionHeader title="Catatan cepat" description="Indikator yang perlu dipantau" />
-          <div className="mt-6 space-y-5">
-            <div className="flex items-end justify-between"><span className="text-sm text-muted-foreground">Tingkat kehadiran</span><strong className="font-mono text-3xl tracking-[-0.06em] text-primary">{rate}%</strong></div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${rate}%` }} /></div>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-t border-border/60 pt-5">
-              <div><p className="eyebrow">Hadir</p><p className="mt-1 font-mono text-xl text-primary">{stats.hadir}</p></div>
-              <div><p className="eyebrow">Izin / sakit</p><p className="mt-1 font-mono text-xl text-amber-700">{stats.izin + stats.sakit}</p></div>
-              <div><p className="eyebrow">Alpha</p><p className="mt-1 font-mono text-xl text-destructive">{stats.alpha}</p></div>
-              <div><p className="eyebrow">Total santri</p><p className="mt-1 font-mono text-xl">{stats.santri}</p></div>
+          <SectionHeader title="Aktivitas bulan ini" description="Ringkasan kegiatan pemantauan" />
+          <div className="mt-5 grid grid-cols-2 gap-4">
+            <div className="rounded-lg border border-border p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground"><BookOpen className="h-4 w-4" /> Perkembangan dinilai</div>
+              <p className="mt-1 font-mono text-3xl font-semibold tracking-[-0.06em] text-primary">{monthPerk}</p>
+            </div>
+            <div className="rounded-lg border border-border p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground"><Users className="h-4 w-4" /> Catatan presensi</div>
+              <p className="mt-1 font-mono text-3xl font-semibold tracking-[-0.06em]">{monthPresensi}</p>
             </div>
           </div>
         </section>
       </div>
-      <section>
-        <SectionHeader title="Catatan operasional" description="Pilih angka di atas untuk membuka data lengkap." />
-        <Card className="mt-4 surface-panel"><CardContent className="p-5 text-sm leading-6 text-muted-foreground">Pantau pengisian presensi dan perkembangan secara berkala agar laporan setiap santri tetap lengkap.</CardContent></Card>
-      </section>
     </div>
   )
+}
+
+function iso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+function currentMonthStart(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`
+}
+function periodLabel(period: string): string {
+  return PERIODS.find((x) => x.value === period)?.label ?? period
 }

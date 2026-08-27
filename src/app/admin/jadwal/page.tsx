@@ -3,27 +3,31 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Trash2, Clock, Users } from "lucide-react";
-import { formatHari, formatTime } from "@/lib/format";
+import { formatTime } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 
-interface Jadwal {
-  id: string;
-  pengajar_id: string | null;
-  hari: string;
-  jam_mulai: string;
-  jam_selesai: string;
-  pengajars?: { nama: string };
+interface Kelompok {
+  id: string
+  nama: string
+  sesi_id: string
+  sesi?: { nama: string } | null
+  pengajar?: { nama: string } | null
 }
 
-interface Pengajar {
-  id: string;
-  nama: string;
+interface Jadwal {
+  id: string
+  kelompok_id: string
+  hari: string
+  jam_mulai: string
+  jam_selesai: string
+  kelompok?: { id: string; nama: string; sesi?: { nama: string } | null; pengajar?: { nama: string } | null } | null
 }
 
 const HARI_ORDER = ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT"];
@@ -31,69 +35,83 @@ const HARI_LABEL: Record<string, string> = {
   SENIN: "Senin", SELASA: "Selasa", RABU: "Rabu",
   KAMIS: "Kamis", JUMAT: "Jumat",
 };
-
-const SESI_OPTIONS = [
-  { label: "Pagi (07:30 - 10:00)", value: "PAGI" },
-  { label: "Sore (16:00 - 17:30)", value: "SORE" },
-];
-
 const SESI_JAM: Record<string, { jam_mulai: string; jam_selesai: string }> = {
   PAGI: { jam_mulai: "07:30", jam_selesai: "10:00" },
   SORE: { jam_mulai: "16:00", jam_selesai: "17:30" },
 };
 
+function kelompokLabel(k: { nama: string; sesi?: { nama: string } | null }): string {
+  const sesi = k.sesi?.nama === "PAGI" ? "Pagi" : k.sesi?.nama === "SORE" ? "Sore" : ""
+  return sesi ? `${sesi} · Kelompok ${k.nama}` : `Kelompok ${k.nama}`
+}
+
 export default function JadwalPage() {
   const [jadwals, setJadwals] = useState<Jadwal[]>([]);
-  const [pengajars, setPengajars] = useState<Pengajar[]>([]);
+  const [kelompoks, setKelompoks] = useState<Kelompok[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Jadwal | null>(null);
-  const [form, setForm] = useState({ pengajar_id: "", hari: "", sesi: "PAGI" });
+  const [form, setForm] = useState({ kelompok_id: "", hari: "", jam_mulai: "07:30", jam_selesai: "10:00" });
   const [confirmDel, setConfirmDel] = useState<Jadwal | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const supabase = createClient();
 
   const fetchData = async () => {
-    const [jadwalRes, pengajarRes] = await Promise.all([
-      supabase.from("jadwals").select("*, pengajars(nama)").order("jam_mulai"),
-      supabase.from("pengajars").select("id, nama").order("nama"),
+    const [jadwalRes, kelompokRes] = await Promise.all([
+      supabase.from("jadwal").select("*, kelompok(id, nama, sesi(nama), pengajar(nama))").order("jam_mulai"),
+      supabase.from("kelompok").select("id, nama, sesi_id, sesi(nama), pengajar(nama)").order("sesi_id").order("nama"),
     ]);
-    setJadwals(jadwalRes.data ?? []);
-    setPengajars(pengajarRes.data ?? []);
+    setJadwals((jadwalRes.data ?? []) as unknown as Jadwal[]);
+    setKelompoks((kelompokRes.data ?? []) as unknown as Kelompok[]);
     setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, []);
 
+  const applyJam = (kelompokId: string) => {
+    const k = kelompoks.find((x) => x.id === kelompokId)
+    const sesi = k?.sesi?.nama
+    if (sesi && SESI_JAM[sesi]) {
+      setForm((f) => ({ ...f, kelompok_id: kelompokId, jam_mulai: SESI_JAM[sesi].jam_mulai, jam_selesai: SESI_JAM[sesi].jam_selesai }))
+    } else {
+      setForm((f) => ({ ...f, kelompok_id: kelompokId }))
+    }
+  };
+
   const openAdd = (hari?: string) => {
     setEditing(null);
-    setForm({ pengajar_id: "", hari: hari ?? "", sesi: "PAGI" });
+    setForm({ kelompok_id: "", hari: hari ?? "", jam_mulai: "07:30", jam_selesai: "10:00" });
     setDialogOpen(true);
   };
 
   const openEdit = (j: Jadwal) => {
-    const sesi = j.jam_mulai.slice(0, 5) === "07:30" ? "PAGI" : "SORE";
     setEditing(j);
-    setForm({ pengajar_id: j.pengajar_id ?? "", hari: j.hari, sesi });
+    setForm({ kelompok_id: j.kelompok_id, hari: j.hari, jam_mulai: j.jam_mulai.slice(0, 5), jam_selesai: j.jam_selesai.slice(0, 5) });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!form.pengajar_id || !form.hari) {
-      setErrorMsg("Pengajar dan hari wajib diisi")
+    if (!form.kelompok_id || !form.hari) {
+      setErrorMsg("Kelompok dan hari wajib diisi")
       return
     }
-    const jam = SESI_JAM[form.sesi];
     const payload = {
-      pengajar_id: form.pengajar_id,
+      kelompok_id: form.kelompok_id,
       hari: form.hari,
-      jam_mulai: jam.jam_mulai,
-      jam_selesai: jam.jam_selesai,
+      jam_mulai: form.jam_mulai,
+      jam_selesai: form.jam_selesai,
     };
     if (editing) {
-      await supabase.from("jadwals").update(payload).eq("id", editing.id);
+      const { error } = await supabase.from("jadwal").update(payload).eq("id", editing.id)
+      if (error) { setErrorMsg(error.message); return }
     } else {
-      await supabase.from("jadwals").insert(payload);
+      const { error } = await supabase.from("jadwal").insert(payload)
+      if (error) {
+        setErrorMsg(error.message.includes("duplicate") || error.message.includes("unique")
+          ? "Kelompok sudah memiliki jadwal pada hari ini"
+          : error.message)
+        return
+      }
     }
     setDialogOpen(false);
     fetchData();
@@ -103,7 +121,8 @@ export default function JadwalPage() {
     if (!confirmDel) return
     const id = confirmDel.id
     setConfirmDel(null)
-    await supabase.from("jadwals").delete().eq("id", id);
+    const { error } = await supabase.from("jadwal").delete().eq("id", id)
+    if (error) { setErrorMsg(error.message); return }
     fetchData();
   };
 
@@ -114,7 +133,7 @@ export default function JadwalPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Ritme belajar" title="Jadwal mengajar" description="Atur pengajar, hari, dan sesi mengajar." action={<Button onClick={() => openAdd()} className="h-9 px-4">
+      <PageHeader eyebrow="Ritme belajar" title="Jadwal kelompok" description="Atur jadwal hari untuk setiap kelompok." action={<Button onClick={() => openAdd()} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Jadwal
         </Button>} />
 
@@ -156,9 +175,14 @@ export default function JadwalPage() {
                         <div className="flex items-start justify-between mb-1.5">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-sm font-medium text-foreground leading-tight truncate">
-                              {j.pengajars?.nama ?? "-"}
-                            </span>
+                            <div className="min-w-0">
+                              <span className="block text-sm font-medium text-foreground leading-tight truncate">
+                                {j.kelompok ? kelompokLabel(j.kelompok) : "-"}
+                              </span>
+                              {j.kelompok?.pengajar?.nama && (
+                                <span className="block text-xs text-muted-foreground truncate">{j.kelompok.pengajar.nama}</span>
+                              )}
+                            </div>
                           </div>
                           <button
                             onClick={(e) => { e.stopPropagation(); setConfirmDel(j); }}
@@ -188,11 +212,11 @@ export default function JadwalPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Pengajar</Label>
-              <Select value={form.pengajar_id} onValueChange={(v: string | null) => v && setForm({ ...form, pengajar_id: v })} items={pengajars.map((p) => ({ label: p.nama, value: p.id }))}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Pilih pengajar" /></SelectTrigger>
+              <Label>Kelompok</Label>
+              <Select value={form.kelompok_id} onValueChange={(v: string | null) => v && applyJam(v)} items={kelompoks.map((k) => ({ label: kelompokLabel(k), value: k.id }))}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelompok" /></SelectTrigger>
                 <SelectContent>
-                  {pengajars.map((p) => <SelectItem key={p.id} value={p.id}>{p.nama}</SelectItem>)}
+                  {kelompoks.map((k) => <SelectItem key={k.id} value={k.id}>{kelompokLabel(k)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -205,18 +229,17 @@ export default function JadwalPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Sesi</Label>
-              <Select value={form.sesi} onValueChange={(v: string | null) => v && setForm({ ...form, sesi: v })} items={SESI_OPTIONS}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {SESI_OPTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Pagi: 07:30 - 10:00 · Sore: 16:00 - 17:30
-              </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Jam Mulai</Label>
+                <Input type="time" value={form.jam_mulai} onChange={(e) => setForm({ ...form, jam_mulai: e.target.value })} className="h-9" />
+              </div>
+              <div className="space-y-2">
+                <Label>Jam Selesai</Label>
+                <Input type="time" value={form.jam_selesai} onChange={(e) => setForm({ ...form, jam_selesai: e.target.value })} className="h-9" />
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">Jam otomatis mengikuti sesi kelompok (Pagi 07:30-10:00 · Sore 16:00-17:30), dapat diubah.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="h-9">Batal</Button>

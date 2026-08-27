@@ -10,8 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Users, Search, GraduationCap, Eye, EyeOff } from "lucide-react"
-import { formatGender, formatRole } from "@/lib/format"
+import { Plus, Pencil, Trash2, Users, Search, Eye, EyeOff } from "lucide-react"
+import { formatGender } from "@/lib/format"
 import { PageHeader } from "@/components/layout/page-header"
 import { FilterBar } from "@/components/layout/filter-bar"
 
@@ -20,7 +20,12 @@ interface Pengajar {
   nama: string
   jenis_kelamin: string | null
   no_hp: string | null
-  users?: { id: string; username: string; role: string }
+  alamat: string | null
+  profiles?: { id: string; nama: string; role: string } | null
+}
+
+function normalizeUsername(nama: string): string {
+  return nama.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "")
 }
 
 export default function PengajarPage() {
@@ -37,7 +42,7 @@ export default function PengajarPage() {
     nama: "",
     jenis_kelamin: "",
     no_hp: "",
-    username: "",
+    alamat: "",
     password: "",
   })
   const supabase = createClient()
@@ -57,8 +62,8 @@ export default function PengajarPage() {
 
   const fetchData = async () => {
     const { data } = await supabase
-      .from("pengajars")
-      .select("*, users(id, username, role)")
+      .from("pengajar")
+      .select("*, profiles(id, nama, role)")
       .order("nama")
     setPengajars(data ?? [])
     setLoading(false)
@@ -68,7 +73,7 @@ export default function PengajarPage() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ nama: "", jenis_kelamin: "", no_hp: "", username: "", password: "" })
+    setForm({ nama: "", jenis_kelamin: "", no_hp: "", alamat: "", password: "" })
     setShowPassword(false)
     setDialogOpen(true)
   }
@@ -79,7 +84,7 @@ export default function PengajarPage() {
       nama: p.nama,
       jenis_kelamin: p.jenis_kelamin ?? "",
       no_hp: p.no_hp ?? "",
-      username: p.users?.username ?? "",
+      alamat: p.alamat ?? "",
       password: "",
     })
     setShowPassword(false)
@@ -89,10 +94,6 @@ export default function PengajarPage() {
   const handleSave = async () => {
     if (!form.nama) {
       setErrorMsg("Nama lengkap wajib diisi")
-      return
-    }
-    if (!form.username) {
-      setErrorMsg("Username wajib diisi")
       return
     }
     if (!editing && !form.password) {
@@ -109,18 +110,18 @@ export default function PengajarPage() {
       nama: form.nama,
       jenis_kelamin: form.jenis_kelamin || null,
       no_hp: form.no_hp || null,
+      alamat: form.alamat || null,
     }
 
     if (editing) {
-      const { error: pengajarErr } = await supabase.from("pengajars").update(payload).eq("id", editing.id)
+      const { error: pengajarErr } = await supabase.from("pengajar").update(payload).eq("id", editing.id)
       if (pengajarErr) { setErrorMsg(pengajarErr.message); setSaving(false); return }
 
-      if (editing.users?.id) {
-        const { error: userErr } = await supabase.from("users").update({ username: form.username }).eq("id", editing.users.id)
-        if (userErr) { setErrorMsg(userErr.message); setSaving(false); return }
+      if (editing.profiles?.id) {
+        await supabase.from("profiles").update({ nama: form.nama }).eq("id", editing.profiles.id)
         if (form.password) {
           try {
-            await adminAuth("update", { id: editing.users.id, password: form.password })
+            await adminAuth("update", { id: editing.profiles.id, password: form.password })
           } catch (err) {
             setErrorMsg((err as Error).message)
             setSaving(false)
@@ -129,30 +130,33 @@ export default function PengajarPage() {
         }
       }
     } else {
-      const { data: newPengajar, error: pengajarErr } = await supabase.from("pengajars").insert(payload).select().single()
-      if (pengajarErr) { setErrorMsg(pengajarErr.message); setSaving(false); return }
       let authId: string | null = null
+      let pengajarId: string | null = null
       try {
         const created = await adminAuth("create", {
-          email: `${form.username}@tpa-baitulyatama.local`,
+          email: `${normalizeUsername(form.nama)}@tpa-baitulyatama.local`,
           password: form.password,
         })
         authId = created.id
-        const { error: userInsertErr } = await supabase.from("users").insert({
+        const { error: profErr } = await supabase.from("profiles").insert({
           id: authId,
-          username: form.username,
+          nama: form.nama,
           role: "PENGAJAR",
         })
-        if (userInsertErr) throw userInsertErr
-        const { error: linkErr } = await supabase.from("pengajars").update({ user_id: authId }).eq("id", newPengajar.id)
-        if (linkErr) throw linkErr
+        if (profErr) throw profErr
+        const { data: newPj, error: pjErr } = await supabase.from("pengajar").insert({ profile_id: authId, ...payload }).select("id").single()
+        if (pjErr) throw pjErr
+        pengajarId = newPj.id
       } catch (err) {
-        if (authId) await adminAuth("delete", { id: authId })
-        await supabase.from("pengajars").delete().eq("id", newPengajar.id)
+        if (pengajarId) await supabase.from("pengajar").delete().eq("id", pengajarId)
+        if (authId) {
+          await supabase.from("profiles").delete().eq("id", authId).then(() => {})
+          await adminAuth("delete", { id: authId })
+        }
         const message = (err as Error).message ?? ""
         setErrorMsg(message.includes("duplicate") || message.includes("unique")
-          ? `Username "${form.username}" sudah digunakan`
-          : message || "Gagal membuat akun pengajar")
+          ? `Nama "${form.nama}" sudah digunakan sebagai akun`
+          : message || "Gagal membuat pengajar")
         setSaving(false)
         return
       }
@@ -168,12 +172,12 @@ export default function PengajarPage() {
     const p = confirmDel
     setConfirmDel(null)
 
-    await supabase.from("pengajars").delete().eq("id", p.id)
-
-    if (p.users?.id) {
-      await supabase.from("users").delete().eq("id", p.users.id)
+    const profileId = p.profiles?.id
+    await supabase.from("pengajar").delete().eq("id", p.id)
+    if (profileId) {
+      await supabase.from("profiles").delete().eq("id", profileId)
       try {
-        await adminAuth("delete", { id: p.users.id })
+        await adminAuth("delete", { id: profileId })
       } catch (err) {
         setErrorMsg((err as Error).message)
       }
@@ -183,19 +187,19 @@ export default function PengajarPage() {
 
   const filtered = pengajars.filter((p) =>
     p.nama.toLowerCase().includes(search.toLowerCase()) ||
-    p.users?.username?.toLowerCase().includes(search.toLowerCase())
+    p.profiles?.nama?.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Data inti" title="Pengajar" description="Kelola profil pengajar dan akses akun mereka." action={<Button onClick={openAdd} className="h-9 px-4">
+      <PageHeader eyebrow="Data inti" title="Pengajar" description="Kelola data pengajar dan akun login mereka." action={<Button onClick={openAdd} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Pengajar
         </Button>} />
 
       <FilterBar><div className="relative w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Cari nama atau username..."
+          placeholder="Cari nama..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9 h-9"
@@ -245,9 +249,10 @@ export default function PengajarPage() {
                 <h3 className="font-semibold text-foreground mb-1">{p.nama}</h3>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   <Badge variant="secondary" className="text-[10px]">{formatGender(p.jenis_kelamin)}</Badge>
-                  <Badge variant="outline" className="text-[10px]">{p.users?.username ?? "-"}</Badge>
+                  <Badge variant="outline" className="text-[10px]">{p.profiles?.nama ?? "tanpa akun"}</Badge>
                 </div>
                 {p.no_hp && <p className="text-xs text-muted-foreground">{p.no_hp}</p>}
+                {p.alamat && <p className="text-xs text-muted-foreground mt-0.5">{p.alamat}</p>}
               </CardContent>
             </Card>
           ))}
@@ -262,7 +267,7 @@ export default function PengajarPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Nama Lengkap</Label>
-              <Input value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} className="h-9" placeholder="Nama lengkap pengajar" />
+              <Input value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} className="h-9" placeholder="Nama lengkap pengajar" disabled={!!editing && !!editing.profiles} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -281,8 +286,8 @@ export default function PengajarPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Username</Label>
-              <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="h-9" placeholder="Username login" disabled={!!editing} />
+              <Label>Alamat</Label>
+              <Input value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} className="h-9" placeholder="Alamat (opsional)" />
             </div>
             <div className="space-y-2">
               <Label>Password {editing ? "(kosongkan jika tidak diubah)" : ""}</Label>
@@ -303,6 +308,7 @@ export default function PengajarPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {!editing && <p className="text-xs text-muted-foreground">Akun login dibuat otomatis dengan nama ini (email: nama@tpa-baitulyatama.local).</p>}
             </div>
           </div>
           <DialogFooter>

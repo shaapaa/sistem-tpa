@@ -16,11 +16,22 @@ import { PageHeader } from "@/components/layout/page-header"
 import { DatePicker } from "@/components/ui/date-picker"
 import { FilterBar } from "@/components/layout/filter-bar"
 
+interface Sesi { id: string; nama: string }
+
+interface Kelompok {
+  id: string
+  nama: string
+  sesi_id: string
+  sesi?: { nama: string } | null
+}
+
 interface Santri {
   id: string
   nama: string
   jenis_kelamin: string | null
   tanggal_lahir: string | null
+  kelompok_id: string | null
+  alamat: string | null
   nama_ayah: string | null
   nama_ibu: string | null
   no_hp_wali: string | null
@@ -29,43 +40,64 @@ interface Santri {
   iuran: number | null
   keterangan: string | null
   pendidikan_saat_ini: string | null
-  sesi: string | null
+  kelompok?: { id: string; nama: string; sesi?: { nama: string } | null } | null
+}
+
+function kelompokLabel(k: { nama: string; sesi?: { nama: string } | null }): string {
+  const sesi = k.sesi?.nama === "PAGI" ? "Pagi" : k.sesi?.nama === "SORE" ? "Sore" : ""
+  return sesi ? `${sesi} · Kelompok ${k.nama}` : `Kelompok ${k.nama}`
 }
 
 export default function SantriPage() {
   const [santris, setSantris] = useState<Santri[]>([])
+  const [sesis, setSesis] = useState<Sesi[]>([])
+  const [kelompoks, setKelompoks] = useState<Kelompok[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Santri | null>(null)
   const [search, setSearch] = useState("")
   const [confirmDel, setConfirmDel] = useState<Santri | null>(null)
+  const [errorMsg, setErrorMsg] = useState("")
   const [form, setForm] = useState({
     nama: "",
     jenis_kelamin: "",
     tanggal_lahir: "",
+    sesi: "",
+    keterangan: "",
+    alamat: "",
     nama_ayah: "",
     nama_ibu: "",
     no_hp_wali: "",
     pekerjaan_ayah: "",
     pekerjaan_ibu: "",
     iuran: "",
-    keterangan: "",
     pendidikan_saat_ini: "",
-    sesi: "",
   })
   const supabase = createClient()
 
   const fetchData = async () => {
-    const { data } = await supabase.from("santris").select("*").order("nama")
-    setSantris(data ?? [])
+    const [santriRes, sesiRes, kelompokRes] = await Promise.all([
+      supabase.from("santri").select("*, kelompok(id, nama, sesi(nama))").order("nama"),
+      supabase.from("sesi").select("id, nama").order("nama"),
+      supabase.from("kelompok").select("id, nama, sesi_id, sesi(nama)").order("sesi_id").order("nama"),
+    ])
+    setSantris((santriRes.data ?? []) as unknown as Santri[])
+    setSesis((sesiRes.data ?? []) as Sesi[])
+    setKelompoks((kelompokRes.data ?? []) as unknown as Kelompok[])
     setLoading(false)
   }
 
   useEffect(() => { fetchData() }, [])
 
+  // Kelompok otomatis: Iqra -> A, Al-Qur&apos;an -> B, pada sesi terpilih
+  const kelompokIdFor = (sesiId: string, bacaan: string): string => {
+    const namaKel = bacaan === "IQRA" ? "A" : "B"
+    return kelompoks.find((k) => k.sesi_id === sesiId && k.nama === namaKel)?.id ?? ""
+  }
+
   const openAdd = () => {
     setEditing(null)
-    setForm({ nama: "", jenis_kelamin: "", tanggal_lahir: "", nama_ayah: "", nama_ibu: "", no_hp_wali: "", pekerjaan_ayah: "", pekerjaan_ibu: "", iuran: "", keterangan: "", pendidikan_saat_ini: "", sesi: "" })
+    setForm({ nama: "", jenis_kelamin: "", tanggal_lahir: "", sesi: "", keterangan: "", alamat: "", nama_ayah: "", nama_ibu: "", no_hp_wali: "", pekerjaan_ayah: "", pekerjaan_ibu: "", iuran: "", pendidikan_saat_ini: "" })
     setDialogOpen(true)
   }
 
@@ -75,39 +107,56 @@ export default function SantriPage() {
       nama: s.nama,
       jenis_kelamin: s.jenis_kelamin ?? "",
       tanggal_lahir: s.tanggal_lahir ?? "",
+      sesi: s.kelompok?.sesi?.nama ?? "",
+      keterangan: s.keterangan ?? "",
+      alamat: s.alamat ?? "",
       nama_ayah: s.nama_ayah ?? "",
       nama_ibu: s.nama_ibu ?? "",
       no_hp_wali: s.no_hp_wali ?? "",
       pekerjaan_ayah: s.pekerjaan_ayah ?? "",
       pekerjaan_ibu: s.pekerjaan_ibu ?? "",
       iuran: s.iuran?.toString() ?? "",
-      keterangan: s.keterangan ?? "",
       pendidikan_saat_ini: s.pendidikan_saat_ini ?? "",
-      sesi: s.sesi ?? "",
     })
     setDialogOpen(true)
   }
 
   const handleSave = async () => {
+    if (!form.nama) {
+      setErrorMsg("Nama lengkap wajib diisi")
+      return
+    }
+    if (!form.sesi || !form.keterangan) {
+      setErrorMsg("Sesi dan jenis bacaan wajib diisi")
+      return
+    }
+    const kelompokId = kelompokIdFor(form.sesi, form.keterangan)
+    if (!kelompokId) {
+      setErrorMsg("Kelompok untuk sesi dan jenis bacaan ini belum tersedia. Buat di halaman Kelompok.")
+      return
+    }
     const payload = {
       nama: form.nama,
       jenis_kelamin: form.jenis_kelamin || null,
       tanggal_lahir: form.tanggal_lahir || null,
+      kelompok_id: kelompokId,
+      keterangan: form.keterangan || null,
+      alamat: form.alamat || null,
       nama_ayah: form.nama_ayah || null,
       nama_ibu: form.nama_ibu || null,
       no_hp_wali: form.no_hp_wali || null,
       pekerjaan_ayah: form.pekerjaan_ayah || null,
       pekerjaan_ibu: form.pekerjaan_ibu || null,
       iuran: form.iuran ? parseFloat(form.iuran) : 0,
-      keterangan: form.keterangan || null,
       pendidikan_saat_ini: form.pendidikan_saat_ini || null,
-      sesi: form.sesi || null,
     }
 
     if (editing) {
-      await supabase.from("santris").update(payload).eq("id", editing.id)
+      const { error } = await supabase.from("santri").update(payload).eq("id", editing.id)
+      if (error) { setErrorMsg(error.message); return }
     } else {
-      await supabase.from("santris").insert(payload)
+      const { error } = await supabase.from("santri").insert(payload)
+      if (error) { setErrorMsg(error.message); return }
     }
 
     setDialogOpen(false)
@@ -118,18 +167,19 @@ export default function SantriPage() {
     if (!confirmDel) return
     const id = confirmDel.id
     setConfirmDel(null)
-    await supabase.from("santris").delete().eq("id", id)
+    const { error } = await supabase.from("santri").delete().eq("id", id)
+    if (error) { setErrorMsg(error.message); return }
     fetchData()
   }
 
   const filtered = santris.filter((s) =>
     s.nama.toLowerCase().includes(search.toLowerCase()) ||
-    (s.sesi ?? "").toLowerCase().includes(search.toLowerCase())
+    (s.kelompok?.nama ?? "").toLowerCase().includes(search.toLowerCase())
   )
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Data inti" title="Santri" description="Kelola identitas, sesi belajar, wali, dan informasi pendidikan santri." action={<Button onClick={openAdd} className="h-9 px-4"> 
+      <PageHeader eyebrow="Data inti" title="Santri" description="Kelola identitas santri, sesi, jenis bacaan, wali, dan informasi pendidikan." action={<Button onClick={openAdd} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Santri
         </Button>} />
 
@@ -167,9 +217,9 @@ export default function SantriPage() {
                 </div>
                 <h3 className="font-semibold text-foreground mb-1">{s.nama}</h3>
                 <div className="flex flex-wrap gap-1.5 mb-2">
-                  <Badge variant="secondary" className="text-[10px]">{s.sesi === "PAGI" ? "Pagi" : s.sesi === "SORE" ? "Sore" : "-"}</Badge>
+                  {s.kelompok && <Badge variant="outline" className="text-[10px]">{kelompokLabel(s.kelompok)}</Badge>}
+                  <Badge variant="secondary" className="text-[10px]">{s.keterangan === "IQRA" ? "Iqra" : s.keterangan === "QURAN" ? "Al-Qur&apos;an" : "-"}</Badge>
                   <Badge variant="secondary" className="text-[10px]">{formatGender(s.jenis_kelamin)}</Badge>
-                  {s.keterangan && <Badge variant="secondary" className="text-[10px]">{s.keterangan}</Badge>}
                 </div>
                 {(s.nama_ayah || s.nama_ibu) && (
                   <p className="text-xs text-muted-foreground">Wali: {s.nama_ayah ?? "-"} / {s.nama_ibu ?? "-"}</p>
@@ -208,29 +258,35 @@ export default function SantriPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Sesi Belajar</Label>
-                <Select value={form.sesi} onValueChange={(v: string | null) => setForm({ ...form, sesi: v ?? "" })} items={[{ label: "Pagi", value: "PAGI" }, { label: "Sore", value: "SORE" }]}>
+                <Label>Sesi</Label>
+                <Select value={form.sesi} onValueChange={(v: string | null) => setForm({ ...form, sesi: v ?? "" })} items={sesis.map((s) => ({ label: s.nama === "PAGI" ? "Pagi" : s.nama === "SORE" ? "Sore" : s.nama, value: s.nama }))}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Pilih sesi" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PAGI">Pagi</SelectItem>
-                    <SelectItem value="SORE">Sore</SelectItem>
+                    {sesis.map((s) => <SelectItem key={s.id} value={s.nama}>{s.nama === "PAGI" ? "Pagi" : s.nama === "SORE" ? "Sore" : s.nama}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Pendidikan Saat Ini</Label>
-                <Input value={form.pendidikan_saat_ini} onChange={(e) => setForm({ ...form, pendidikan_saat_ini: e.target.value })} className="h-9" placeholder="Contoh: SDN 1 Kelas 3" />
+                <Label>Jenis Bacaan</Label>
+                <Select value={form.keterangan} onValueChange={(v: string | null) => setForm({ ...form, keterangan: v ?? "" })} items={[{ label: "Iqra", value: "IQRA" }, { label: "Al-Qur&apos;an", value: "QURAN" }]}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Pilih" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="IQRA">Iqra</SelectItem>
+                    <SelectItem value="QURAN">Al-Qur&apos;an</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Kelompok otomatis: <strong>Iqra → Kelompok A</strong>, <strong>Al-Qur&apos;an → Kelompok B</strong> pada sesi terpilih.
+            </p>
             <div className="space-y-2">
-              <Label>Keterangan (Jenis Bacaan)</Label>
-              <Select value={form.keterangan} onValueChange={(v: string | null) => setForm({ ...form, keterangan: v ?? "" })} items={[{ label: "Iqra", value: "IQRA" }, { label: "Al-Quran", value: "QURAN" }]}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Pilih" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="IQRA">Iqra</SelectItem>
-                  <SelectItem value="QURAN">Al-Quran</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Pendidikan Saat Ini</Label>
+              <Input value={form.pendidikan_saat_ini} onChange={(e) => setForm({ ...form, pendidikan_saat_ini: e.target.value })} className="h-9" placeholder="Contoh: SDN 1 Kelas 3" />
+            </div>
+            <div className="space-y-2">
+              <Label>Alamat</Label>
+              <Input value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} className="h-9" placeholder="Alamat tempat tinggal" />
             </div>
             <div className="space-y-2">
               <Label>Iuran/Infaq Bulanan</Label>
@@ -285,6 +341,14 @@ export default function SantriPage() {
         cancelLabel="Batal"
         variant="destructive"
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={!!errorMsg}
+        onOpenChange={(o) => !o && setErrorMsg("")}
+        title="Perhatian"
+        message={errorMsg}
+        confirmLabel="OK"
       />
     </div>
   )
