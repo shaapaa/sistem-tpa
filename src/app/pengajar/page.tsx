@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
-import { Calendar, ArrowRight, AlertTriangle, ClipboardList, CalendarCheck, CalendarX, Activity, Users } from "lucide-react";
+import { Calendar, ArrowRight, AlertTriangle, ClipboardList, CalendarCheck, CalendarX, Activity, Users, TrendingUp, UserX, BookMarked } from "lucide-react";
 import Link from "next/link";
 import { formatHari, formatTime } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
-import { MetricRail } from "@/components/layout/metric-rail";
+import { StatCard } from "@/components/layout/stat-card";
+import { IslamicBanner } from "@/components/layout/islamic-banner";
 import { SectionHeader } from "@/components/layout/section-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -142,12 +143,13 @@ export default function PengajarDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Ruang pengajar" title="Dashboard monitoring" description="Pantau santri dan kehadiran untuk evaluasi ke orang tua." />
-      <MetricRail items={[
-        { label: "Santri", value: santriCount, detail: "dalam kelompok Anda", href: "/pengajar/perkembangan", tone: "primary" },
-        { label: "Jadwal aktif", value: jadwals.length, detail: "slot mengajar mingguan", href: "/pengajar/jadwal" },
-        { label: "Perkembangan", value: monthPerk, detail: "pada periode terpilih", href: "/pengajar/rekap-perkembangan" },
-        { label: "Kehadiran", value: `${attRate}%`, detail: "tingkat periode", href: "/pengajar/presensi", tone: "amber" },
-      ]} />
+      <IslamicBanner text="Sampaikanlah dariku walau satu ayat." source="HR. Bukhari" />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Santri" value={santriCount} detail="dalam kelompok Anda" icon={Users} className="bg-gradient-to-br from-emerald-500 to-teal-700" href="/pengajar/perkembangan" />
+        <StatCard label="Jadwal aktif" value={jadwals.length} detail="slot mengajar mingguan" icon={Calendar} className="bg-gradient-to-br from-indigo-500 to-violet-700" href="/pengajar/jadwal" />
+        <StatCard label="Perkembangan" value={monthPerk} detail="pada periode terpilih" icon={TrendingUp} className="bg-gradient-to-br from-violet-500 to-purple-700" href="/pengajar/rekap-perkembangan" />
+        <StatCard label="Kehadiran" value={`${attRate}%`} detail="tingkat periode" icon={CalendarCheck} className="bg-gradient-to-br from-amber-400 to-orange-600" href="/pengajar/presensi" />
+      </div>
 
       <div className="surface-panel p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -177,20 +179,12 @@ export default function PengajarDashboard() {
 
       <section>
         <SectionHeader title="Ringkasan kehadiran" description={`Periode: ${periodLabel(period)}`} />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            { label: "Hadir", value: attendance.hadir, color: "text-primary", bg: "bg-primary/10", icon: CalendarCheck },
-            { label: "Izin", value: attendance.izin, color: "text-amber-700", bg: "bg-amber-100", icon: CalendarX },
-            { label: "Sakit", value: attendance.sakit, color: "text-amber-700", bg: "bg-amber-100", icon: Activity },
-            { label: "Alpha", value: attendance.alpha, color: "text-destructive", bg: "bg-red-100", icon: CalendarX },
-            { label: "Persentase", value: `${attRate}%`, color: "text-primary", bg: "bg-primary/10", icon: Users },
-          ].map((c) => (
-            <div key={c.label} className="rounded-lg border border-border p-4">
-              <div className={`mb-2 inline-flex rounded-md p-1.5 ${c.bg} ${c.color}`}><c.icon className="h-4 w-4" /></div>
-              <p className="font-mono text-2xl font-semibold tracking-[-0.04em] text-foreground">{c.value}</p>
-              <p className="text-xs text-muted-foreground">{c.label}</p>
-            </div>
-          ))}
+        <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-5">
+          <StatCard label="Hadir" value={attendance.hadir} icon={CalendarCheck} className="bg-gradient-to-br from-emerald-500 to-teal-700" />
+          <StatCard label="Izin" value={attendance.izin} icon={CalendarX} className="bg-gradient-to-br from-amber-400 to-orange-600" />
+          <StatCard label="Sakit" value={attendance.sakit} icon={Activity} className="bg-gradient-to-br from-orange-400 to-red-500" />
+          <StatCard label="Alpha" value={attendance.alpha} icon={UserX} className="bg-gradient-to-br from-rose-500 to-red-600" />
+          <StatCard label="Persentase" value={`${attRate}%`} icon={BookMarked} className="bg-gradient-to-br from-sky-500 to-blue-700" />
         </div>
       </section>
 

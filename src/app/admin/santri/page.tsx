@@ -89,15 +89,23 @@ export default function SantriPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  // Kelompok otomatis: Iqra -> A, Al-Qur&apos;an -> B, pada sesi terpilih
-  const kelompokIdFor = (sesiId: string, bacaan: string): string => {
-    const namaKel = bacaan === "IQRA" ? "A" : "B"
-    return kelompoks.find((k) => k.sesi_id === sesiId && k.nama === namaKel)?.id ?? ""
-  }
-
+  // Kelompok otomatis: Iqra -> A, Al-Quran -> B, pada sesi terpilih
   const openAdd = () => {
     setEditing(null)
-    setForm({ nama: "", jenis_kelamin: "", tanggal_lahir: "", sesi: "", keterangan: "", alamat: "", nama_ayah: "", nama_ibu: "", no_hp_wali: "", pekerjaan_ayah: "", pekerjaan_ibu: "", iuran: "", pendidikan_saat_ini: "" })
+    setForm(
+      { nama: "", 
+        jenis_kelamin: "", 
+        tanggal_lahir: "", 
+        sesi: "", 
+        keterangan: "", 
+        alamat: "", 
+        nama_ayah: "", 
+        nama_ibu: "", 
+        no_hp_wali: "", 
+        pekerjaan_ayah: "", 
+        pekerjaan_ibu: "", 
+        iuran: "", 
+        pendidikan_saat_ini: "" })
     setDialogOpen(true)
   }
 
@@ -130,11 +138,23 @@ export default function SantriPage() {
       setErrorMsg("Sesi dan jenis bacaan wajib diisi")
       return
     }
-    const kelompokId = kelompokIdFor(form.sesi, form.keterangan)
-    if (!kelompokId) {
-      setErrorMsg("Kelompok untuk sesi dan jenis bacaan ini belum tersedia. Buat di halaman Kelompok.")
+    const sesiId = sesis.find((s) => s.nama === form.sesi)?.id
+    if (!sesiId) {
+      setErrorMsg("Sesi tidak ditemukan")
       return
     }
+    const namaKel = form.keterangan === "IQRA" ? "A" : "B"
+    let kelompok = kelompoks.find((k) => k.sesi_id === sesiId && k.nama === namaKel)
+    if (!kelompok) {
+      const { data: created, error: kErr } = await supabase
+        .from("kelompok")
+        .insert({ sesi_id: sesiId, nama: namaKel })
+        .select("id, nama, sesi_id")
+        .single()
+      if (kErr) { setErrorMsg(kErr.message); return }
+      kelompok = created as unknown as Kelompok
+    }
+    const kelompokId = kelompok.id
     const payload = {
       nama: form.nama,
       jenis_kelamin: form.jenis_kelamin || null,
@@ -179,7 +199,7 @@ export default function SantriPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Data inti" title="Santri" description="Kelola identitas santri, sesi, jenis bacaan, wali, dan informasi pendidikan." action={<Button onClick={openAdd} className="h-9 px-4">
+      <PageHeader eyebrow="Manajemen Data" title="Santri" description="Kelola identitas santri, sesi, jenis bacaan, wali, dan informasi pendidikan." action={<Button onClick={openAdd} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Santri
         </Button>} />
 
@@ -218,7 +238,7 @@ export default function SantriPage() {
                 <h3 className="font-semibold text-foreground mb-1">{s.nama}</h3>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {s.kelompok && <Badge variant="outline" className="text-[10px]">{kelompokLabel(s.kelompok)}</Badge>}
-                  <Badge variant="secondary" className="text-[10px]">{s.keterangan === "IQRA" ? "Iqra" : s.keterangan === "QURAN" ? "Al-Qur&apos;an" : "-"}</Badge>
+                  <Badge variant="secondary" className="text-[10px]">{s.keterangan === "IQRA" ? "Iqra" : s.keterangan === "QURAN" ? "Al-Quran" : "-"}</Badge>
                   <Badge variant="secondary" className="text-[10px]">{formatGender(s.jenis_kelamin)}</Badge>
                 </div>
                 {(s.nama_ayah || s.nama_ibu) && (
@@ -268,17 +288,17 @@ export default function SantriPage() {
               </div>
               <div className="space-y-2">
                 <Label>Jenis Bacaan</Label>
-                <Select value={form.keterangan} onValueChange={(v: string | null) => setForm({ ...form, keterangan: v ?? "" })} items={[{ label: "Iqra", value: "IQRA" }, { label: "Al-Qur&apos;an", value: "QURAN" }]}>
+                <Select value={form.keterangan} onValueChange={(v: string | null) => setForm({ ...form, keterangan: v ?? "" })} items={[{ label: "Iqra", value: "IQRA" }, { label: "Al-Quran", value: "QURAN" }]}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Pilih" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="IQRA">Iqra</SelectItem>
-                    <SelectItem value="QURAN">Al-Qur&apos;an</SelectItem>
+                    <SelectItem value="QURAN">Al-Quran</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Kelompok otomatis: <strong>Iqra → Kelompok A</strong>, <strong>Al-Qur&apos;an → Kelompok B</strong> pada sesi terpilih.
+              Kelompok otomatis: <strong>Iqra → Kelompok A</strong>, <strong>Al-Quran → Kelompok B</strong> pada sesi terpilih.
             </p>
             <div className="space-y-2">
               <Label>Pendidikan Saat Ini</Label>

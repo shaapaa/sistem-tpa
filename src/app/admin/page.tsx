@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { PageHeader } from "@/components/layout/page-header"
-import { MetricRail } from "@/components/layout/metric-rail"
 import { SectionHeader } from "@/components/layout/section-header"
+import { StatCard } from "@/components/layout/stat-card"
+import { IslamicBanner } from "@/components/layout/islamic-banner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts"
-import { Users, BookOpen, AlertTriangle, Activity, CalendarCheck, CalendarX } from "lucide-react"
+import { Users, BookOpen, AlertTriangle, Activity, CalendarCheck, CalendarX, GraduationCap, Sunrise, Sunset, TrendingUp, UserX } from "lucide-react"
 import { formatHari, formatTime } from "@/lib/format"
 
 const ATT_COLORS = ["#376b59", "#b58b4b", "#b85b4b", "#768078"]
@@ -147,12 +148,13 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="TPA Baitul Yatama" title="Dashboard monitoring" description="Ringkasan operasional dan evaluasi seluruh TPA." />
-      <MetricRail items={[
-        { label: "Santri Aktif", value: santriCount, detail: "seluruh santri", href: "/admin/santri", tone: "primary" },
-        { label: "Pengajar Aktif", value: pengajarCount, detail: "pengajar terdaftar", href: "/admin/pengajar" },
-        { label: "Sesi Pagi", value: sesiPagi, detail: "santri sesi pagi", href: "/admin/santri" },
-        { label: "Sesi Sore", value: sesiSore, detail: "santri sesi sore", href: "/admin/santri" },
-      ]} />
+      <IslamicBanner text="Sebaik-baik kalian adalah yang mempelajari Al-Qur&apos;an dan mengajarkannya." source="HR. Bukhari" />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Santri Aktif" value={santriCount} detail="seluruh santri" icon={Users} className="bg-gradient-to-br from-emerald-500 to-teal-700" href="/admin/santri" />
+        <StatCard label="Pengajar Aktif" value={pengajarCount} detail="pengajar terdaftar" icon={GraduationCap} className="bg-gradient-to-br from-indigo-500 to-violet-700" href="/admin/pengajar" />
+        <StatCard label="Sesi Pagi" value={sesiPagi} detail="santri sesi pagi" icon={Sunrise} className="bg-gradient-to-br from-amber-400 to-orange-600" href="/admin/santri" />
+        <StatCard label="Sesi Sore" value={sesiSore} detail="santri sesi sore" icon={Sunset} className="bg-gradient-to-br from-violet-500 to-purple-700" href="/admin/santri" />
+      </div>
 
       <div className="surface-panel p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -193,20 +195,12 @@ export default function AdminDashboard() {
 
       <section>
         <SectionHeader title="Ringkasan kehadiran" description={`Periode: ${periodLabel(period)} · Sesi: ${sesiFilter === "ALL" ? "Semua" : sesiFilter === "PAGI" ? "Pagi" : "Sore"}`} />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            { label: "Hadir", value: att.hadir, color: "text-primary", bg: "bg-primary/10", icon: CalendarCheck },
-            { label: "Izin", value: att.izin, color: "text-amber-700", bg: "bg-amber-100", icon: CalendarX },
-            { label: "Sakit", value: att.sakit, color: "text-amber-700", bg: "bg-amber-100", icon: Activity },
-            { label: "Alpha", value: att.alpha, color: "text-destructive", bg: "bg-red-100", icon: CalendarX },
-            { label: "Persentase", value: `${rate}%`, color: "text-primary", bg: "bg-primary/10", icon: Users },
-          ].map((c) => (
-            <div key={c.label} className="rounded-lg border border-border p-4">
-              <div className={`mb-2 inline-flex rounded-md p-1.5 ${c.bg} ${c.color}`}><c.icon className="h-4 w-4" /></div>
-              <p className="font-mono text-2xl font-semibold tracking-[-0.04em] text-foreground">{c.value}</p>
-              <p className="text-xs text-muted-foreground">{c.label}</p>
-            </div>
-          ))}
+        <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-5">
+          <StatCard label="Hadir" value={att.hadir} icon={CalendarCheck} className="bg-gradient-to-br from-emerald-500 to-teal-700" />
+          <StatCard label="Izin" value={att.izin} icon={CalendarX} className="bg-gradient-to-br from-amber-400 to-orange-600" />
+          <StatCard label="Sakit" value={att.sakit} icon={Activity} className="bg-gradient-to-br from-orange-400 to-red-500" />
+          <StatCard label="Alpha" value={att.alpha} icon={UserX} className="bg-gradient-to-br from-rose-500 to-red-600" />
+          <StatCard label="Persentase" value={`${rate}%`} icon={TrendingUp} className="bg-gradient-to-br from-sky-500 to-blue-700" />
         </div>
       </section>
 
@@ -278,12 +272,12 @@ export default function AdminDashboard() {
         <section className="surface-panel min-w-0 p-5 sm:p-6">
           <SectionHeader title="Aktivitas bulan ini" description="Ringkasan kegiatan pemantauan" />
           <div className="mt-5 grid grid-cols-2 gap-4">
-            <div className="rounded-lg border border-border p-4">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground"><BookOpen className="h-4 w-4" /> Perkembangan dinilai</div>
-              <p className="mt-1 font-mono text-3xl font-semibold tracking-[-0.06em] text-primary">{monthPerk}</p>
+            <div className="rounded-lg bg-gradient-to-br from-primary to-teal-700 p-4 text-white">
+              <div className="flex items-center gap-2 text-xs text-white/80"><BookOpen className="h-4 w-4" /> Perkembangan dinilai</div>
+              <p className="mt-1 font-mono text-3xl font-semibold tracking-[-0.06em]">{monthPerk}</p>
             </div>
-            <div className="rounded-lg border border-border p-4">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground"><Users className="h-4 w-4" /> Catatan presensi</div>
+            <div className="rounded-lg bg-gradient-to-br from-amber-400 to-orange-600 p-4 text-white">
+              <div className="flex items-center gap-2 text-xs text-white/80"><Users className="h-4 w-4" /> Catatan presensi</div>
               <p className="mt-1 font-mono text-3xl font-semibold tracking-[-0.06em]">{monthPresensi}</p>
             </div>
           </div>

@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookOpen, BookMarked, BookHeart, Moon, UserX } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/layout/empty-state";
 
 type BacaanRow = { id: string; tanggal: string; jenis_bacaan: string | null; jilid: number | null; halaman: number | null; juz: number | null; status: string | null; catatan: string | null; surat?: { nama: string } | null }
 type HafalanSuratRow = { id: string; surat_id: string; surat?: { nomor: number; nama: string; jumlah_ayat: number } | null }
@@ -122,7 +123,7 @@ export default function PerkembanganPage() {
           <Card className="card-elevated">
             <CardHeader><CardTitle className="text-sm font-medium">Histori Bacaan</CardTitle></CardHeader>
             <CardContent>
-              {bacaans.length === 0 ? <p className="text-sm text-muted-foreground">Belum ada catatan bacaan</p> : (
+              {bacaans.length === 0 ? <EmptyState message="Belum ada catatan bacaan" hint="Catatan perkembangan bacaan anak akan tampil di sini." /> : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -157,7 +158,7 @@ export default function PerkembanganPage() {
         {/* TAB HAFALAN SURAT */}
         <TabsContent value="hafalan-surat" className="pt-4">
           <div className="space-y-4">
-            {suratDetail.length === 0 ? <p className="text-sm text-muted-foreground">Belum ada hafalan surat</p> : (
+            {suratDetail.length === 0 ? <EmptyState message="Belum ada hafalan surat" hint="Hafalan surat anak akan tampil di sini." /> : (
               suratDetail.map((s) => (
                 <Card key={s.id} className="card-elevated">
                   <CardContent className="p-5">
@@ -170,7 +171,7 @@ export default function PerkembanganPage() {
                     </div>
                     <div className="mt-4 space-y-1.5">
                       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Histori Cicilan</p>
-                      {s.rows.length === 0 ? <p className="text-sm text-muted-foreground">Belum ada cicilan</p> : (
+                      {s.rows.length === 0 ? <EmptyState message="Belum ada cicilan" className="py-6" /> : (
                         s.rows.map((c) => (
                           <div key={c.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
                             <span className="text-foreground">Ayat {c.ayat_mulai}–{c.ayat_selesai}</span>
@@ -194,7 +195,7 @@ export default function PerkembanganPage() {
           <Card className="card-elevated">
             <CardHeader><CardTitle className="text-sm font-medium">Histori Hafalan Doa</CardTitle></CardHeader>
             <CardContent>
-              {doas.length === 0 ? <p className="text-sm text-muted-foreground">Belum ada hafalan doa</p> : (
+              {doas.length === 0 ? <EmptyState message="Belum ada hafalan doa" hint="Hafalan doa harian anak akan tampil di sini." /> : (
                 <div className="space-y-2">
                   {doas.map((d) => (
                     <div key={d.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-2.5">

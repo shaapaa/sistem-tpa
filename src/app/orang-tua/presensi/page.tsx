@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { CalendarCheck, CalendarX, Activity, Users, UserX } from "lucide-react";
 import { formatDate, formatStatus, getStatusBadgeVariant } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/layout/empty-state";
 
 type PresensiRow = { id: string; tanggal: string; status: string; keterangan: string | null }
 
@@ -93,7 +94,7 @@ export default function PresensiPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {[
               { label: "Hadir", value: hadir, color: "text-primary", bg: "bg-primary/10", icon: CalendarCheck },
               { label: "Izin", value: izin, color: "text-amber-700", bg: "bg-amber-100", icon: CalendarX },
@@ -112,7 +113,7 @@ export default function PresensiPage() {
           <Card className="surface-panel">
             <CardContent className="p-5">
               {records.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada presensi pada bulan ini</p>
+                <EmptyState message="Belum ada presensi pada bulan ini" hint="Presensi akan tercatat otomatis saat anak hadir belajar." />
               ) : (
                 <div className="space-y-2">
                   {records.map((r) => (

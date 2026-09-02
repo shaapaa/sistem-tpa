@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Download, CalendarCheck, CalendarX, Activity, UserX, BookOpen } from "lucide-react";
+import { Download, CalendarCheck, CalendarX, Activity, UserX } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/layout/empty-state";
 import { DatePicker } from "@/components/ui/date-picker";
 import { createReportPdf } from "@/lib/report-pdf";
 
@@ -190,10 +191,7 @@ export default function OrangTuaLaporanPage() {
       </div>
 
       {noData ? (
-        <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
-          <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
-          <p className="text-sm text-muted-foreground">Belum ada data perkembangan pada periode ini</p>
-        </div>
+        <EmptyState message="Belum ada data perkembangan pada periode ini" hint="Pilih rentang tanggal lain atau tunggu catatan perkembangan dari pengajar." />
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -112,7 +112,10 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    background-image: radial-gradient(circle at 15% 0%, oklch(0.99 0.018 92 / 0.8), transparent 28rem);
+    background-image:
+      radial-gradient(circle at 12% -6%, oklch(0.55 0.12 172 / 0.14), transparent 30rem),
+      radial-gradient(circle at 92% 8%, oklch(0.72 0.09 82 / 0.12), transparent 26rem),
+      radial-gradient(circle at 50% 120%, oklch(0.38 0.09 158 / 0.09), transparent 34rem);
   }
   html {
     @apply font-sans;
@@ -125,6 +128,14 @@
   }
   .text-pretty {
     text-wrap: pretty;
+  }
+  @media (max-width: 639px) {
+    .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 1rem;
+    }
+    .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 0.875rem;
+    }
   }
   .font-tabular {
     font-variant-numeric: tabular-nums;
@@ -172,6 +183,10 @@
 
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
 }
 
 @keyframes fade-in {

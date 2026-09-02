@@ -6,10 +6,12 @@ import { useAuth } from "@/lib/auth-provider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, BookHeart, AlertTriangle, Users, CalendarCheck, CalendarX, Activity } from "lucide-react";
+import { BookOpen, BookHeart, AlertTriangle, CalendarCheck, CalendarX, Activity, UserX, TrendingUp } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 import { SectionHeader } from "@/components/layout/section-header";
+import { StatCard } from "@/components/layout/stat-card";
+import { IslamicBanner } from "@/components/layout/islamic-banner";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 const TARGET_SURAT = 38; // Juz 30 + Al-Fatihah
@@ -193,27 +195,31 @@ export default function OrangTuaDashboard() {
         }
       />
 
+      <IslamicBanner text="Anak adalah amanah, didiklah mereka dengan pendidikan yang baik." source="Pesan bijak bagi orang tua" />
+
       {santri && (
-        <div className="surface-panel border-l-4 border-l-primary p-5">
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-700 via-primary to-teal-600 p-5 text-white">
+          <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full border border-white/15" />
+          <div className="absolute -bottom-12 -left-8 h-32 w-32 rounded-full border border-white/10" />
+          <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/10 p-3 text-primary font-bold text-lg">{santri.nama.charAt(0)}</div>
+              <div className="rounded-lg bg-white/15 p-3 text-lg font-bold text-white">{santri.nama.charAt(0)}</div>
               <div>
-                <p className="text-xs text-muted-foreground">Nama</p>
-                <p className="font-semibold text-foreground">{santri.nama}</p>
+                <p className="text-xs text-white/70">Nama</p>
+                <p className="font-semibold text-white">{santri.nama}</p>
               </div>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Kelompok</p>
-              <p className="font-medium text-foreground">{santri.kelompok?.nama ?? "-"}</p>
+              <p className="text-xs text-white/70">Kelompok</p>
+              <p className="font-medium text-white">{santri.kelompok?.nama ?? "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Sesi</p>
-              <p className="font-medium text-foreground">{santri.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : santri.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-"}</p>
+              <p className="text-xs text-white/70">Sesi</p>
+              <p className="font-medium text-white">{santri.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : santri.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Pengajar</p>
-              <p className="font-medium text-foreground">{santri.kelompok?.pengajar?.nama ?? "-"}</p>
+              <p className="text-xs text-white/70">Pengajar</p>
+              <p className="font-medium text-white">{santri.kelompok?.pengajar?.nama ?? "-"}</p>
             </div>
           </div>
         </div>
@@ -223,20 +229,12 @@ export default function OrangTuaDashboard() {
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="surface-panel min-w-0 overflow-hidden p-5 sm:p-6">
           <SectionHeader title="Presensi" description={`Periode: ${periodLabel(period)}`} />
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {[
-              { label: "Hadir", value: hadir, color: "text-primary", bg: "bg-primary/10", icon: CalendarCheck },
-              { label: "Izin", value: izin, color: "text-amber-700", bg: "bg-amber-100", icon: CalendarX },
-              { label: "Sakit", value: sakit, color: "text-amber-700", bg: "bg-amber-100", icon: Activity },
-              { label: "Alpha", value: alpha, color: "text-destructive", bg: "bg-red-100", icon: CalendarX },
-              { label: "Persentase", value: `${attendanceRate}%`, color: "text-primary", bg: "bg-primary/10", icon: Users },
-            ].map((c) => (
-              <div key={c.label} className="rounded-lg border border-border p-3 text-center">
-                <div className={`mx-auto mb-1 inline-flex rounded-md p-1.5 ${c.bg} ${c.color}`}><c.icon className="h-4 w-4" /></div>
-                <p className="font-mono text-xl font-semibold text-foreground">{c.value}</p>
-                <p className="text-xs text-muted-foreground">{c.label}</p>
-              </div>
-            ))}
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <StatCard label="Hadir" value={hadir} icon={CalendarCheck} className="bg-gradient-to-br from-emerald-500 to-teal-700" />
+            <StatCard label="Izin" value={izin} icon={CalendarX} className="bg-gradient-to-br from-amber-400 to-orange-600" />
+            <StatCard label="Sakit" value={sakit} icon={Activity} className="bg-gradient-to-br from-orange-400 to-red-500" />
+            <StatCard label="Alpha" value={alpha} icon={UserX} className="bg-gradient-to-br from-rose-500 to-red-600" />
+            <StatCard label="Persentase" value={`${attendanceRate}%`} icon={TrendingUp} className="bg-gradient-to-br from-sky-500 to-blue-700" />
           </div>
           <div className="mt-4 h-[160px] w-full min-w-0">
             {totalPres > 0 ? (
@@ -318,7 +316,7 @@ export default function OrangTuaDashboard() {
         {/* CARD 5 — Praktik Salat */}
         <section className="surface-panel min-w-0 p-5 sm:p-6 lg:col-span-2">
           <SectionHeader title="Praktik Salat" description="Hasil praktik keseluruhan per salat" />
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
             {salatStatus.map((s) => (
               <div key={s.nama} className="rounded-lg border border-border p-3 text-center">
                 <p className="font-medium text-foreground">{s.nama}</p>

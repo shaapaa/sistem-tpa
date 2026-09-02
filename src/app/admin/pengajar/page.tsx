@@ -192,7 +192,7 @@ export default function PengajarPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Data inti" title="Pengajar" description="Kelola data pengajar dan akun login mereka." action={<Button onClick={openAdd} className="h-9 px-4">
+      <PageHeader eyebrow="Manajemen Data" title="Pengajar" description="Kelola data pengajar dan akun login mereka." action={<Button onClick={openAdd} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Pengajar
         </Button>} />
 
@@ -267,7 +267,7 @@ export default function PengajarPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Nama Lengkap</Label>
-              <Input value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} className="h-9" placeholder="Nama lengkap pengajar" disabled={!!editing && !!editing.profiles} />
+              <Input value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} className="h-9" placeholder="Nama lengkap pengajar" autoComplete="off" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -282,12 +282,12 @@ export default function PengajarPage() {
               </div>
               <div className="space-y-2">
                 <Label>No. HP</Label>
-                <Input value={form.no_hp} onChange={(e) => setForm({ ...form, no_hp: e.target.value })} className="h-9" placeholder="08xx-xxxx-xxxx" />
+                <Input value={form.no_hp} onChange={(e) => setForm({ ...form, no_hp: e.target.value })} className="h-9" placeholder="08xx-xxxx-xxxx" autoComplete="off" />
               </div>
             </div>
             <div className="space-y-2">
               <Label>Alamat</Label>
-              <Input value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} className="h-9" placeholder="Alamat (opsional)" />
+              <Input value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} className="h-9" placeholder="Alamat (opsional)" autoComplete="off" />
             </div>
             <div className="space-y-2">
               <Label>Password {editing ? "(kosongkan jika tidak diubah)" : ""}</Label>
@@ -298,6 +298,7 @@ export default function PengajarPage() {
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   className="h-9 pr-10"
                   placeholder={editing ? "Biarkan kosong untuk tidak mengubah" : "Password login"}
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"

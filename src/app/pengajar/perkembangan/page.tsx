@@ -20,6 +20,9 @@ interface Doa { id: string; nama: string }
 interface Komponen { id: string; nama: string }
 interface JenisSalat { id: string; nama: string }
 
+// Urutan hafalan bertahap: Al-Fatihah dulu, lalu Juz 30 dari An-Nas (114) mundur ke An-Naba (78)
+const progressionOrder = (nomor: number) => (nomor === 1 ? -1 : 114 - nomor)
+
 const BAC_SURAT_STATUS = [
   { label: "Lancar", value: "LANCAR" },
   { label: "Kurang Lancar", value: "KURANG_LANCAR" },
@@ -128,7 +131,7 @@ export default function PerkembanganPage() {
         supabase.from("komponen_salat").select("id, nama").eq("aktif", true).order("nama"),
         supabase.from("jenis_salat").select("id, nama").eq("aktif", true).order("nama"),
       ])
-      setSurats((suratRes.data ?? []) as Surat[])
+      setSurats(((suratRes.data ?? []) as Surat[]).sort((a, b) => progressionOrder(a.nomor) - progressionOrder(b.nomor)))
       setDoas((doaRes.data ?? []) as Doa[])
       setKomponens((komponenRes.data ?? []) as Komponen[])
       setJenisSalats((jenisRes.data ?? []) as JenisSalat[])
