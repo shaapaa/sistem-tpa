@@ -61,7 +61,7 @@ export default function PengajarDashboard() {
         supabase.from("jadwal").select("id, hari, jam_mulai, jam_selesai").in("kelompok_id", kelompokIds).order("hari"),
         supabase.from("presensi").select("status, santri_id, tanggal").in("kelompok_id", kelompokIds),
         supabase.from("perkembangan_bacaan").select("santri_id, status, tanggal").in("santri_id", santriIds),
-        supabase.from("hafalan_surat_cicilan").select("tanggal, hafalan_santri(santri_id)").in("hafalan_santri.santri_id", santriIds),
+        supabase.from("hafalan_surat_cicilan").select("tanggal, status, hafalan_santri(santri_id)").in("hafalan_santri.santri_id", santriIds),
         supabase.from("perkembangan_hafalan_doa").select("santri_id, status, tanggal").in("santri_id", santriIds),
         supabase.from("praktik_salat").select("santri_id, status, tanggal").in("santri_id", santriIds),
       ]);
@@ -71,7 +71,7 @@ export default function PengajarDashboard() {
 
       // Month perkembangan count
       type PerkRow = { santri_id: string; status: string | null; tanggal: string }
-      type CicilanRow = { tanggal: string; hafalan_santri?: { santri_id: string } | null }
+      type CicilanRow = { tanggal: string; status: string | null; hafalan_santri?: { santri_id: string } | null }
       const bacaanRows = (bacaanRes.data ?? []) as unknown as PerkRow[]
       const cicilanRows = (cicilanRes.data ?? []) as unknown as CicilanRow[]
       const doaRows = (doaRes.data ?? []) as unknown as PerkRow[]
@@ -90,10 +90,11 @@ export default function PengajarDashboard() {
       })
       const reasons: Record<string, string> = {}
       const addReason = (id: string, reason: string) => { if (!reasons[id]) reasons[id] = reason }
-      bacaanRows.forEach((r) => addReason(r.santri_id, "Perkembangan bacaan dinilai Tidak Lancar"))
-      cicilanRows.forEach((r) => { const sid = r.hafalan_santri?.santri_id; if (sid) addReason(sid, "Hafalan dinilai Tidak Lancar") })
-      doaRows.forEach((r) => addReason(r.santri_id, "Hafalan doa dinilai Tidak Lancar"))
-      salatRows.forEach((r) => addReason(r.santri_id, "Praktik salat membutuhkan bimbingan"))
+      const KURANG = (s: string | null) => s === "KURANG_LANCAR" || s === "TIDAK_LANCAR"
+      bacaanRows.forEach((r) => { if (KURANG(r.status) && r.tanggal >= monthStart) addReason(r.santri_id, "Perkembangan bacaan dinilai Kurang/Tidak Lancar") })
+      cicilanRows.forEach((r) => { const sid = r.hafalan_santri?.santri_id; if (sid && KURANG(r.status) && r.tanggal >= monthStart) addReason(sid, "Hafalan dinilai Kurang/Tidak Lancar") })
+      doaRows.forEach((r) => { if (KURANG(r.status) && r.tanggal >= monthStart) addReason(r.santri_id, "Hafalan doa dinilai Kurang/Tidak Lancar") })
+      salatRows.forEach((r) => { if (r.status === "BUTUH_BIMBINGAN" && r.tanggal >= monthStart) addReason(r.santri_id, "Praktik salat membutuhkan bimbingan") })
 
       const attList: { nama: string; reason: string; id: string }[] = []
       santris.forEach((s) => {

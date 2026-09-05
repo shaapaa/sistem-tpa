@@ -123,7 +123,7 @@ export default function RekapPerkembanganPage() {
       ;((praktik.data ?? []) as unknown as PraktikRow[]).forEach((r) => list.push(build("PRAKTIK SALAT")(r.id, r.tanggal, r.santri_id, r.jenis_salat?.nama ?? "-", r.status, r.catatan)))
 
       const filtered = list.filter((it) => {
-        if (selectedSantri && it.santri_id !== selectedSantri) return false
+        if (selectedSantri && selectedSantri !== "ALL" && it.santri_id !== selectedSantri) return false
         if (filterTipe !== "ALL" && it.tipe !== filterTipe) return false
         if (searchDate && it.tanggal !== searchDate) return false
         return true

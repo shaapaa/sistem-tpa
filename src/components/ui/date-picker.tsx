@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -22,6 +23,8 @@ function isoDate(date: Date) {
 export function DatePicker({ value, onChange, placeholder = "Pilih tanggal", disabled }: DatePickerProps) {
   const initial = value ? new Date(`${value}T00:00:00`) : new Date()
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
   const [month, setMonth] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1))
   const days = useMemo(() => {
     const firstDay = new Date(month.getFullYear(), month.getMonth(), 1).getDay()
@@ -30,32 +33,64 @@ export function DatePicker({ value, onChange, placeholder = "Pilih tanggal", dis
   }, [month])
   const label = value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(`${value}T00:00:00`)) : placeholder
 
+  const toggle = () => {
+    if (disabled) return
+    if (open) { setOpen(false); return }
+    const el = wrapRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const w = Math.min(288, window.innerWidth - 16)
+    let left = r.left
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8
+    if (left < 8) left = 8
+    setPos({ top: r.bottom + 6, left })
+    setOpen(true)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener("scroll", close, true)
+    window.addEventListener("resize", close)
+    return () => {
+      window.removeEventListener("scroll", close, true)
+      window.removeEventListener("resize", close)
+    }
+  }, [open])
+
   return (
-    <div className="relative">
-      <Button type="button" variant="outline" disabled={disabled} onClick={() => setOpen(!open)} className="h-9 w-full justify-between px-3 font-normal">
-        <span className={cn(!value && "text-muted-foreground")}>{label}</span>
-        <CalendarDays className="h-4 w-4 text-muted-foreground" />
-      </Button>
-      {open && !disabled && (
-        <div className="absolute left-0 top-11 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg">
-          <div className="flex items-center justify-between">
-            <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronLeft className="h-4 w-4" /></Button>
-            <p className="text-sm font-medium capitalize">{monthNames.format(month)}</p>
-            <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><ChevronRight className="h-4 w-4" /></Button>
+    <>
+      <div ref={wrapRef} className="w-full">
+        <Button type="button" variant="outline" disabled={disabled} onClick={toggle} className="h-9 w-full justify-between px-3 font-normal">
+          <span className={cn(!value && "text-muted-foreground")}>{label}</span>
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+        </Button>
+      </div>
+      {open && pos && createPortal(
+        <div className="fixed inset-0 z-[70]" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false) }}>
+          <div className="absolute" style={{ top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()}>
+            <div className="w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg">
+              <div className="flex items-center justify-between">
+                <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+                <p className="text-sm font-medium capitalize">{monthNames.format(month)}</p>
+                <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><ChevronRight className="h-4 w-4" /></Button>
+              </div>
+              <div className="mt-2 grid grid-cols-7 text-center text-[10px] font-medium text-muted-foreground">
+                {weekdays.map((day) => <span key={day} className="py-1">{day}</span>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {days.map((day, index) => {
+                  if (!day) return <span key={`empty-${index}`} />
+                  const date = new Date(month.getFullYear(), month.getMonth(), day)
+                  const dateValue = isoDate(date)
+                  return <button key={dateValue} type="button" onClick={() => { onChange(dateValue); setOpen(false) }} className={cn("h-8 rounded-md text-sm hover:bg-muted", value === dateValue && "bg-primary text-primary-foreground hover:bg-primary")}>{day}</button>
+                })}
+              </div>
+            </div>
           </div>
-          <div className="mt-2 grid grid-cols-7 text-center text-[10px] font-medium text-muted-foreground">
-            {weekdays.map((day) => <span key={day} className="py-1">{day}</span>)}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {days.map((day, index) => {
-              if (!day) return <span key={`empty-${index}`} />
-              const date = new Date(month.getFullYear(), month.getMonth(), day)
-              const dateValue = isoDate(date)
-              return <button key={dateValue} type="button" onClick={() => { onChange(dateValue); setOpen(false) }} className={cn("h-8 rounded-md text-sm hover:bg-muted", value === dateValue && "bg-primary text-primary-foreground hover:bg-primary")}>{day}</button>
-            })}
-          </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   )
 }

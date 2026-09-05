@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Users, Search, Eye, EyeOff } from "lucide-react"
+import { Plus, Pencil, Trash2, Users, Search } from "lucide-react"
 import { formatGender } from "@/lib/format"
 import { PageHeader } from "@/components/layout/page-header"
 import { FilterBar } from "@/components/layout/filter-bar"
@@ -24,17 +24,12 @@ interface Pengajar {
   profiles?: { id: string; nama: string; role: string } | null
 }
 
-function normalizeUsername(nama: string): string {
-  return nama.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "")
-}
-
 export default function PengajarPage() {
   const [pengajars, setPengajars] = useState<Pengajar[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Pengajar | null>(null)
   const [search, setSearch] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
   const [confirmDel, setConfirmDel] = useState<Pengajar | null>(null)
   const [errorMsg, setErrorMsg] = useState("")
   const [saving, setSaving] = useState(false)
@@ -43,7 +38,6 @@ export default function PengajarPage() {
     jenis_kelamin: "",
     no_hp: "",
     alamat: "",
-    password: "",
   })
   const supabase = createClient()
 
@@ -73,8 +67,7 @@ export default function PengajarPage() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ nama: "", jenis_kelamin: "", no_hp: "", alamat: "", password: "" })
-    setShowPassword(false)
+    setForm({ nama: "", jenis_kelamin: "", no_hp: "", alamat: "" })
     setDialogOpen(true)
   }
 
@@ -85,23 +78,13 @@ export default function PengajarPage() {
       jenis_kelamin: p.jenis_kelamin ?? "",
       no_hp: p.no_hp ?? "",
       alamat: p.alamat ?? "",
-      password: "",
     })
-    setShowPassword(false)
     setDialogOpen(true)
   }
 
   const handleSave = async () => {
     if (!form.nama) {
       setErrorMsg("Nama lengkap wajib diisi")
-      return
-    }
-    if (!editing && !form.password) {
-      setErrorMsg("Password wajib diisi")
-      return
-    }
-    if (form.password && form.password.length < 6) {
-      setErrorMsg("Password minimal 6 karakter")
       return
     }
 
@@ -119,44 +102,14 @@ export default function PengajarPage() {
 
       if (editing.profiles?.id) {
         await supabase.from("profiles").update({ nama: form.nama }).eq("id", editing.profiles.id)
-        if (form.password) {
-          try {
-            await adminAuth("update", { id: editing.profiles.id, password: form.password })
-          } catch (err) {
-            setErrorMsg((err as Error).message)
-            setSaving(false)
-            return
-          }
-        }
       }
     } else {
-      let authId: string | null = null
-      let pengajarId: string | null = null
-      try {
-        const created = await adminAuth("create", {
-          email: `${normalizeUsername(form.nama)}@tpa-baitulyatama.local`,
-          password: form.password,
-        })
-        authId = created.id
-        const { error: profErr } = await supabase.from("profiles").insert({
-          id: authId,
-          nama: form.nama,
-          role: "PENGAJAR",
-        })
-        if (profErr) throw profErr
-        const { data: newPj, error: pjErr } = await supabase.from("pengajar").insert({ profile_id: authId, ...payload }).select("id").single()
-        if (pjErr) throw pjErr
-        pengajarId = newPj.id
-      } catch (err) {
-        if (pengajarId) await supabase.from("pengajar").delete().eq("id", pengajarId)
-        if (authId) {
-          await supabase.from("profiles").delete().eq("id", authId).then(() => {})
-          await adminAuth("delete", { id: authId })
-        }
-        const message = (err as Error).message ?? ""
+      const { error: pjErr } = await supabase.from("pengajar").insert(payload)
+      if (pjErr) {
+        const message = pjErr.message ?? ""
         setErrorMsg(message.includes("duplicate") || message.includes("unique")
-          ? `Nama "${form.nama}" sudah digunakan sebagai akun`
-          : message || "Gagal membuat pengajar")
+          ? `Nama "${form.nama}" sudah digunakan`
+          : message || "Gagal menambah pengajar")
         setSaving(false)
         return
       }
@@ -289,28 +242,9 @@ export default function PengajarPage() {
               <Label>Alamat</Label>
               <Input value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} className="h-9" placeholder="Alamat (opsional)" autoComplete="off" />
             </div>
-            <div className="space-y-2">
-              <Label>Password {editing ? "(kosongkan jika tidak diubah)" : ""}</Label>
-              <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  className="h-9 pr-10"
-                  placeholder={editing ? "Biarkan kosong untuk tidak mengubah" : "Password login"}
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((s) => !s)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {!editing && <p className="text-xs text-muted-foreground">Akun login dibuat otomatis dengan nama ini (email: nama@tpa-baitulyatama.local).</p>}
-            </div>
+            <p className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+              Akun login (email & password) pengajar dibuat terpisah di menu <strong className="font-medium text-foreground">Profil &amp; Akun</strong>.
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="h-9">Batal</Button>

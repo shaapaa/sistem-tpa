@@ -161,16 +161,18 @@ export default function OrangTuaDashboard() {
   const recent: { id: string; tanggal: string; tipe: string; detail: string; status: string | null; catatan: string | null }[] = [];
   const push = (tipe: string, id: string, tanggal: string, detail: string, status: string | null, catatan: string | null) => recent.push({ id, tanggal, tipe, detail, status, catatan });
   bacaans.forEach((r) => push("Bacaan", r.id, r.tanggal, r.jenis_bacaan === "IQRA" ? `Iqra ${r.jilid} · Hal. ${r.halaman}` : `${r.surat?.nama ?? "-"} · Juz ${r.juz ?? "-"}`, r.status, r.catatan));
-  cicilans.forEach((r) => push("Hafalan Surat", r.id, r.tanggal, `${r.hafalan_santri?.surat?.nama ?? "-"} · ayat ${r.ayat_mulai}-${r.ayat_selesai}`, r.status, r.catatan));
-  doas.forEach((r) => push("Hafalan Doa", r.id, r.tanggal, r.doa?.nama ?? "-", r.status, r.catatan));
-  komponens.forEach((r) => push("Salat Komponen", r.id, r.tanggal, r.komponen_salat?.nama ?? "-", r.status, r.catatan));
-  praktiks.forEach((r) => push("Praktik Salat", r.id, r.tanggal, r.jenis_salat?.nama ?? "-", r.status, r.catatan));
+  cicilans.forEach((r) => { const nama = r.hafalan_santri?.surat?.nama; if (!nama) return; push("Hafalan Surat", r.id, r.tanggal, `${nama} · ayat ${r.ayat_mulai}-${r.ayat_selesai}`, r.status, r.catatan); });
+  doas.forEach((r) => { if (!r.doa?.nama) return; push("Hafalan Doa", r.id, r.tanggal, r.doa.nama, r.status, r.catatan); });
+  komponens.forEach((r) => { if (!r.komponen_salat?.nama) return; push("Salat Komponen", r.id, r.tanggal, r.komponen_salat.nama, r.status, r.catatan); });
+  praktiks.forEach((r) => { if (!r.jenis_salat?.nama) return; push("Praktik Salat", r.id, r.tanggal, r.jenis_salat.nama, r.status, r.catatan); });
   const recentSorted = recent.sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1)).slice(0, 8);
 
-  // --- Perlu perhatian ---
+  // --- Perlu perhatian (hanya pada periode terpilih) ---
   const attention = recent.filter((r) =>
-    (r.tipe.includes("Bacaan") || r.tipe.includes("Hafalan")) && (r.status === "KURANG_LANCAR" || r.status === "TIDAK_LANCAR") ||
-    (r.tipe.includes("Salat") && r.status === "BUTUH_BIMBINGAN")
+    inPeriod(r.tanggal) && (
+      (r.tipe.includes("Bacaan") || r.tipe.includes("Hafalan")) && (r.status === "KURANG_LANCAR" || r.status === "TIDAK_LANCAR") ||
+      (r.tipe.includes("Salat") && r.status === "BUTUH_BIMBINGAN")
+    )
   ).sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1)).slice(0, 6);
 
   return (

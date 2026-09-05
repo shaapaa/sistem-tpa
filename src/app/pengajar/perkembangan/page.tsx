@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, BookOpen, BookMarked, Moon, CheckCircle } from "lucide-react";
+import { Save, BookOpen, BookMarked, Moon, CheckCircle, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 
 interface Santri { id: string; nama: string; kelompok_id: string | null }
@@ -354,7 +354,22 @@ export default function PerkembanganPage() {
       )}
 
       {selectedSantri ? (
-        <Tabs defaultValue="bacaan" className="w-full">
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
+                {(santris.find((s) => s.id === selectedSantri)?.nama ?? "?").charAt(0)}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Input perkembangan untuk</p>
+                <p className="font-medium text-foreground">{santris.find((s) => s.id === selectedSantri)?.nama ?? "Santri"}</p>
+              </div>
+            </div>
+            <Button variant="outline" onClick={() => { setSelectedSantri(""); setSearch(""); }} className="h-9">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Ganti santri
+            </Button>
+          </div>
+          <Tabs defaultValue="bacaan" className="w-full">
           <TabsList className="grid min-h-12 h-auto w-full grid-cols-3">
             <TabsTrigger value="bacaan" className="gap-1 px-1 text-xs sm:text-sm"><BookOpen className="h-4 w-4" /> Bacaan</TabsTrigger>
             <TabsTrigger value="hafalan" className="gap-1 px-1 text-xs sm:text-sm"><BookMarked className="h-4 w-4" /> Hafalan</TabsTrigger>
@@ -570,6 +585,7 @@ export default function PerkembanganPage() {
             </Card>
           </TabsContent>
         </Tabs>
+        </>
       ) : selectedKelompok ? (
         <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
           <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />

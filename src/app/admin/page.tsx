@@ -51,10 +51,10 @@ export default function AdminDashboard() {
         supabase.from("santri").select("id, nama, kelompok(sesi(nama))"),
         supabase.from("presensi").select("status, santri_id, tanggal, kelompok_id, kelompok(sesi(nama))"),
         supabase.from("jadwal").select("hari, jam_mulai, jam_selesai, kelompok(nama, sesi(nama), pengajar(nama))"),
-        supabase.from("perkembangan_bacaan").select("santri_id, status, tanggal").eq("status", "TIDAK_LANCAR"),
-        supabase.from("hafalan_surat_cicilan").select("hafalan_santri_id, status, tanggal, hafalan_santri(santri_id)").eq("status", "TIDAK_LANCAR"),
-        supabase.from("perkembangan_hafalan_doa").select("santri_id, status, tanggal").eq("status", "TIDAK_LANCAR"),
-        supabase.from("praktik_salat").select("santri_id, status, tanggal").eq("status", "BUTUH_BIMBINGAN"),
+        supabase.from("perkembangan_bacaan").select("santri_id, status, tanggal"),
+        supabase.from("hafalan_surat_cicilan").select("hafalan_santri_id, status, tanggal, hafalan_santri(santri_id)"),
+        supabase.from("perkembangan_hafalan_doa").select("santri_id, status, tanggal"),
+        supabase.from("praktik_salat").select("santri_id, status, tanggal"),
       ])
 
       setSantriCount(santriC.count ?? 0)
@@ -92,10 +92,11 @@ export default function AdminDashboard() {
       })
       const reasons: Record<string, string> = {}
       const addReason = (id: string, reason: string) => { if (!reasons[id]) reasons[id] = reason }
-      bacaanRows.forEach((r) => addReason(r.santri_id, "Perkembangan bacaan dinilai Tidak Lancar"))
-      cicilanRows.forEach((r) => { const sid = r.hafalan_santri?.santri_id; if (sid) addReason(sid, "Hafalan dinilai Tidak Lancar") })
-      doaRows.forEach((r) => addReason(r.santri_id, "Hafalan doa dinilai Tidak Lancar"))
-      salatRows.forEach((r) => addReason(r.santri_id, "Praktik salat membutuhkan bimbingan"))
+      const KURANG = (s: string | null) => s === "KURANG_LANCAR" || s === "TIDAK_LANCAR"
+      bacaanRows.forEach((r) => { if (KURANG(r.status) && r.tanggal >= monthStart) addReason(r.santri_id, "Perkembangan bacaan dinilai Kurang/Tidak Lancar") })
+      cicilanRows.forEach((r) => { const sid = r.hafalan_santri?.santri_id; if (sid && KURANG(r.status) && r.tanggal >= monthStart) addReason(sid, "Hafalan dinilai Kurang/Tidak Lancar") })
+      doaRows.forEach((r) => { if (KURANG(r.status) && r.tanggal >= monthStart) addReason(r.santri_id, "Hafalan doa dinilai Kurang/Tidak Lancar") })
+      salatRows.forEach((r) => { if (r.status === "BUTUH_BIMBINGAN" && r.tanggal >= monthStart) addReason(r.santri_id, "Praktik salat membutuhkan bimbingan") })
 
       const attList: { nama: string; reason: string; sesi: string }[] = []
       santris.forEach((s) => {
