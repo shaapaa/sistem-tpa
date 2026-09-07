@@ -12,7 +12,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { SectionHeader } from "@/components/layout/section-header";
 import { StatCard } from "@/components/layout/stat-card";
 import { IslamicBanner } from "@/components/layout/islamic-banner";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
+import { CapaianBar } from "@/components/layout/capaian-bar";
 
 const TARGET_SURAT = 38; // Juz 30 + Al-Fatihah
 
@@ -55,9 +56,9 @@ export default function OrangTuaDashboard() {
     const now = new Date();
     const d = new Date();
     if (period === "week") d.setDate(now.getDate() - 7);
-    else if (period === "month") d.setMonth(now.getMonth() - 1);
-    else if (period === "quarter") d.setMonth(now.getMonth() - 3);
-    else if (period === "year") d.setFullYear(now.getFullYear() - 1);
+    else if (period === "month") { d.setDate(1); d.setMonth(now.getMonth(), 1); }
+    else if (period === "quarter") { d.setMonth(now.getMonth() - 3); d.setDate(1); }
+    else if (period === "year") { d.setMonth(0); d.setDate(1); }
     return isoDate(d);
   }, [period]);
 
@@ -138,6 +139,23 @@ export default function OrangTuaDashboard() {
   const suratGroups = [...bySurat.values()];
   const suratLulus = suratGroups.filter((g) => g.jumlah > 0 && g.max >= g.jumlah).length;
   const latestSurat = [...suratGroups].sort((a, b) => (a.lastTanggal < b.lastTanggal ? 1 : -1))[0];
+
+  // Tren hafalan kumulatif jumlah surat (periode terpilih)
+  const trendMap = new Map<string, { jumlah: number; max: number }>();
+  const trend: { label: string; dimulai: number; tuntas: number }[] = [];
+  [...cicilans].filter((c) => inPeriod(c.tanggal) && c.hafalan_santri?.surat?.nama).sort((a, b) => (a.tanggal > b.tanggal ? 1 : -1)).forEach((c) => {
+    const nama = c.hafalan_santri?.surat?.nama as string;
+    const jumlah = c.hafalan_santri?.surat?.jumlah_ayat ?? 0;
+    const cur = trendMap.get(nama) ?? { jumlah, max: 0 };
+    cur.max = Math.max(cur.max, c.ayat_selesai ?? 0);
+    trendMap.set(nama, cur);
+    const label = new Date(c.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+    const last = trend[trend.length - 1];
+    const dimulai = trendMap.size;
+    const tuntas = [...trendMap.values()].filter((s) => s.max >= s.jumlah).length;
+    if (last && last.label === label) { last.dimulai = dimulai; last.tuntas = tuntas; }
+    else trend.push({ label, dimulai, tuntas });
+  });
 
   // --- Hafalan doa ---
   const doaDihafal = new Set(doas.map((d) => d.doa?.nama).filter(Boolean)).size;
@@ -226,6 +244,42 @@ export default function OrangTuaDashboard() {
           </div>
         </div>
       )}
+
+      <section className="surface-panel p-5 sm:p-6">
+        <SectionHeader title="Capaian Santri" description="Posisi capaian saat ini (kehadiran & posisi bacaan pada periode terpilih; hafalan & salat kumulatif)" />
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <CapaianBar label="Kehadiran" value={`${hadir} dari ${totalPres} pertemuan`} pct={attendanceRate} color="bg-emerald-500" />
+          <CapaianBar label="Bacaan" value={latestBacaan ? (latestBacaan.jenis_bacaan === "IQRA" ? `Iqra Jilid ${latestBacaan.jilid} · Hal. ${latestBacaan.halaman}` : `${latestBacaan.surat?.nama ?? "-"} · Juz ${latestBacaan.juz ?? "-"}`) : "Belum ada catatan"} pct={latestBacaan?.jenis_bacaan === "IQRA" && latestBacaan.jilid ? Math.round((latestBacaan.jilid / 6) * 100) : 0} color="bg-amber-500" />
+          <CapaianBar label="Hafalan Surat" value={`${suratLulus} dari ${TARGET_SURAT} surat tuntas`} pct={TARGET_SURAT ? Math.round((suratLulus / TARGET_SURAT) * 100) : 0} color="bg-indigo-500" />
+          <CapaianBar label="Hafalan Doa" value={`${doaDihafal} dari ${totalDoa} doa`} pct={totalDoa ? Math.round((doaDihafal / totalDoa) * 100) : 0} color="bg-violet-500" />
+          <CapaianBar label="Praktik Salat" value={`${salatLancar} dari ${salatStatus.length} salat Lancar`} pct={salatStatus.length ? Math.round((salatLancar / salatStatus.length) * 100) : 0} color="bg-sky-500" />
+        </div>
+        {trend.length >= 2 && (
+          <div className="mt-4 rounded-lg border border-border/70 p-3 sm:p-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Perkembangan hafalan (kumulatif jumlah surat)</p>
+            <div className="h-52 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trend} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="otTuntas2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.25} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
+                    <linearGradient id="otDimulai2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity={0.2} /><stop offset="100%" stopColor="#f59e0b" stopOpacity={0} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.86 0.018 92)" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "oklch(0.48 0.025 155)" }} tickLine={false} axisLine={{ stroke: "oklch(0.86 0.018 92)" }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "oklch(0.48 0.025 155)" }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid oklch(0.86 0.018 92)" }} />
+                  <Area type="monotone" dataKey="dimulai" name="Surat dimulai" stroke="#f59e0b" strokeWidth={2} fill="url(#otDimulai2)" />
+                  <Area type="monotone" dataKey="tuntas" name="Surat tuntas" stroke="#10b981" strokeWidth={2} fill="url(#otTuntas2)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+              <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />Surat tuntas</span>
+              <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-500" />Surat dimulai</span>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* CARD 1 — Presensi */}
       <div className="grid gap-4 lg:grid-cols-2">

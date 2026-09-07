@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, BookOpen, BookMarked, Moon, CheckCircle, ArrowLeft } from "lucide-react";
@@ -32,54 +33,6 @@ const KURANG_STATUS = [
   { label: "Lancar", value: "LANCAR" },
   { label: "Butuh Bimbingan", value: "BUTUH_BIMBINGAN" },
 ];
-
-function SearchableSelect({ value, onChange, placeholder, options }: {
-  value: string
-  onChange: (value: string) => void
-  placeholder: string
-  options: { value: string; label: string }[]
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const filtered = options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()));
-  const selected = options.find((o) => o.value === value);
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent px-2.5 text-sm text-left text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-      >
-        <span className={selected ? "truncate" : "text-muted-foreground"}>{selected?.label ?? placeholder}</span>
-        <span className="text-muted-foreground">▾</span>
-      </button>
-      {open && (
-        <div className="absolute left-0 top-11 z-50 w-full rounded-lg border border-border bg-popover text-popover-foreground shadow-lg">
-          <div className="p-2 pb-1">
-            <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari..." className="h-9" />
-          </div>
-          <div className="max-h-52 overflow-y-auto p-1">
-            {filtered.length === 0 ? (
-              <p className="px-2.5 py-2 text-sm text-muted-foreground">Tidak ditemukan</p>
-            ) : (
-              filtered.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => { onChange(o.value); setOpen(false); setQuery(""); }}
-                  className={`flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-muted ${value === o.value ? "bg-primary/10 font-medium" : ""}`}
-                >
-                  {o.label}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function PerkembanganPage() {
   const { user } = useAuth();
@@ -177,13 +130,18 @@ export default function PerkembanganPage() {
 
   const today = new Date().toISOString().split("T")[0]
 
+  // Adanya inputan perkembangan pada hari itu = santri hadir.
+  // Set/upsert presensi HADIR (menimpa status non-hadir bila ada inputan perkembangan).
   const autoPresensi = async (santriId: string, pengajarId: string) => {
     try {
       const santri = santris.find((s) => s.id === santriId)
-      const { data: existing } = await supabase.from("presensi").select("status").eq("santri_id", santriId).eq("tanggal", today).maybeSingle()
-      if (!existing) {
-        await supabase.from("presensi").insert({ santri_id: santriId, tanggal: today, status: "HADIR", pengajar_id: pengajarId, kelompok_id: santri?.kelompok_id ?? null })
-      }
+      await supabase.from("presensi").upsert({
+        santri_id: santriId,
+        tanggal: today,
+        status: "HADIR",
+        pengajar_id: pengajarId,
+        kelompok_id: santri?.kelompok_id ?? null,
+      }, { onConflict: "santri_id,tanggal" })
     } catch { /* best effort */ }
   }
 

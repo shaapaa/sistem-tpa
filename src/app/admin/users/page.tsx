@@ -33,6 +33,7 @@ function normalizeUsername(nama: string): string {
 export default function UsersPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [santris, setSantris] = useState<{ id: string; nama: string; profile_id: string | null }[]>([])
+  const [pengajars, setPengajars] = useState<{ id: string; nama: string; profile_id: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Profile | null>(null)
@@ -45,6 +46,7 @@ export default function UsersPage() {
     role: "",
     password: "",
     santri_id: "",
+    pengajar_id: "",
   })
   const supabase = createClient()
 
@@ -62,12 +64,14 @@ export default function UsersPage() {
   }
 
   const fetchData = async () => {
-    const [profRes, santriRes] = await Promise.all([
+    const [profRes, santriRes, pengajarRes] = await Promise.all([
       supabase.from("profiles").select("*, santri(nama), pengajar(nama)").order("created_at", { ascending: false }),
       supabase.from("santri").select("id, nama, profile_id").order("nama"),
+      supabase.from("pengajar").select("id, nama, profile_id").order("nama"),
     ])
     setProfiles(profRes.data ?? [])
     setSantris(santriRes.data ?? [])
+    setPengajars(pengajarRes.data ?? [])
     setLoading(false)
   }
 
@@ -75,13 +79,19 @@ export default function UsersPage() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ nama: "", role: "PENGAJAR", password: "", santri_id: "" })
+    setForm({ nama: "", role: "PENGAJAR", password: "", santri_id: "", pengajar_id: "" })
     setDialogOpen(true)
   }
 
   const openEdit = (p: Profile) => {
     setEditing(p)
-    setForm({ nama: p.nama, role: p.role, password: "", santri_id: p.santri?.nama ? "" : "" })
+    setForm({
+      nama: p.nama,
+      role: p.role,
+      password: "",
+      santri_id: p.santri?.nama ? "" : "",
+      pengajar_id: p.pengajar?.nama ? "" : "",
+    })
     setDialogOpen(true)
   }
 
@@ -99,6 +109,10 @@ export default function UsersPage() {
       setErrorMsg("Pilih santri untuk akun santri")
       return
     }
+    if (!editing && form.role === "PENGAJAR" && !form.pengajar_id) {
+      setErrorMsg("Pilih pengajar untuk akun pengajar")
+      return
+    }
 
     if (editing) {
       const { error: profErr } = await supabase.from("profiles").update({ nama: form.nama, role: form.role }).eq("id", editing.id)
@@ -112,13 +126,18 @@ export default function UsersPage() {
         }
       }
       // Kelola relasi santri -> profile (role SANTRI)
-      if (form.role === "SANTRI") {
-        if (form.santri_id) {
-          await supabase.from("santri").update({ profile_id: null }).eq("profile_id", editing.id)
-          await supabase.from("santri").update({ profile_id: editing.id }).eq("id", form.santri_id)
-        }
-      } else {
+      if (form.role !== "SANTRI") {
         await supabase.from("santri").update({ profile_id: null }).eq("profile_id", editing.id)
+      } else if (form.santri_id) {
+        await supabase.from("santri").update({ profile_id: null }).eq("profile_id", editing.id)
+        await supabase.from("santri").update({ profile_id: editing.id }).eq("id", form.santri_id)
+      }
+      // Kelola relasi pengajar -> profile (role PENGAJAR)
+      if (form.role !== "PENGAJAR") {
+        await supabase.from("pengajar").update({ profile_id: null }).eq("profile_id", editing.id)
+      } else if (form.pengajar_id) {
+        await supabase.from("pengajar").update({ profile_id: null }).eq("profile_id", editing.id)
+        await supabase.from("pengajar").update({ profile_id: editing.id }).eq("id", form.pengajar_id)
       }
     } else {
       let authId: string
@@ -149,6 +168,15 @@ export default function UsersPage() {
           return
         }
       }
+      if (form.role === "PENGAJAR" && form.pengajar_id) {
+        const { error: linkErr } = await supabase.from("pengajar").update({ profile_id: authId }).eq("id", form.pengajar_id)
+        if (linkErr) {
+          await supabase.from("profiles").delete().eq("id", authId)
+          await adminAuth("delete", { id: authId })
+          setErrorMsg("Gagal menghubungkan pengajar. Coba lagi.")
+          return
+        }
+      }
     }
 
     setShowPassword(false)
@@ -161,6 +189,7 @@ export default function UsersPage() {
     const id = confirmDel.id
     setConfirmDel(null)
     await supabase.from("santri").update({ profile_id: null }).eq("profile_id", id)
+    await supabase.from("pengajar").update({ profile_id: null }).eq("profile_id", id)
     const { error: profDelErr } = await supabase.from("profiles").delete().eq("id", id)
     if (profDelErr) {
       setErrorMsg("Profil terhubung ke data lain. Hapus melalui halaman terkait terlebih dahulu.")
@@ -181,6 +210,8 @@ export default function UsersPage() {
 
   const linkedSantriIds = santris.filter((s) => s.profile_id).map((s) => s.id)
   const availableSantris = santris.filter((s) => !linkedSantriIds.includes(s.id))
+  const linkedPengajarIds = pengajars.filter((p) => p.profile_id).map((p) => p.id)
+  const availablePengajars = pengajars.filter((p) => !linkedPengajarIds.includes(p.id))
 
   return (
     <div className="space-y-6">
@@ -273,7 +304,7 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={form.role} onValueChange={(v: string | null) => v && setForm({ ...form, role: v, santri_id: "" })} items={[{ label: "Admin", value: "ADMIN" }, { label: "Pengajar", value: "PENGAJAR" }, { label: "Santri", value: "SANTRI" }]}>
+              <Select value={form.role} onValueChange={(v: string | null) => v && setForm({ ...form, role: v, santri_id: "", pengajar_id: "" })} items={[{ label: "Admin", value: "ADMIN" }, { label: "Pengajar", value: "PENGAJAR" }, { label: "Santri", value: "SANTRI" }]}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ADMIN">Admin</SelectItem>
@@ -300,6 +331,26 @@ export default function UsersPage() {
                   </SelectContent>
                 </Select>
                 {availableSantris.length === 0 && <p className="text-xs text-muted-foreground">Semua santri sudah memiliki akun</p>}
+              </div>
+            )}
+            {form.role === "PENGAJAR" && !editing && (
+              <div className="space-y-2">
+                <Label>Pengajar</Label>
+                <Select
+                  value={form.pengajar_id}
+                  onValueChange={(v: string | null) => {
+                    if (!v) return
+                    const pengajar = pengajars.find((p) => p.id === v)
+                    setForm({ ...form, pengajar_id: v, nama: pengajar ? pengajar.nama : form.nama })
+                  }}
+                  items={availablePengajars.map((p) => ({ label: p.nama, value: p.id }))}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Pilih pengajar" /></SelectTrigger>
+                  <SelectContent>
+                    {availablePengajars.map((p) => <SelectItem key={p.id} value={p.id}>{p.nama}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {availablePengajars.length === 0 && <p className="text-xs text-muted-foreground">Semua pengajar sudah memiliki akun</p>}
               </div>
             )}
             <div className="space-y-2">
