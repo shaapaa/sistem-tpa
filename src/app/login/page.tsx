@@ -92,7 +92,7 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-sidebar/70 via-transparent to-transparent" />
 
         <div className="relative flex items-center gap-3 px-12 py-12">
-          <img src="/logo-mark.svg" alt="Logo TPA Baitul Yatama" className="h-10 w-10 rounded-md" />
+          <img src="/image/logo-tpa-transparent.png" alt="Logo TPA Baitul Yatama" className="h-10 w-auto object-contain" />
           <div>
             <p className="font-semibold text-[oklch(0.98_0.008_92)]">Baitul Yatama</p>
             <p className="text-xs text-[oklch(0.72_0.025_92)]">Sistem Monitoring</p>
@@ -120,9 +120,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Logo paling atas (mobile) */}
           <div className="mb-7 flex flex-col items-center gap-1.5 lg:hidden">
-            <div className="rounded-2xl bg-white p-2 shadow-sm ring-1 ring-primary/10">
-              <img src="/logo-mark.svg" alt="Logo TPA Baitul Yatama" className="h-11 w-11 rounded-xl" />
-            </div>
+            <img src="/image/logo-tpa-transparent.png" alt="Logo TPA Baitul Yatama" className="h-12 w-auto object-contain" />
             <p className="mt-1.5 font-semibold text-foreground">Baitul Yatama</p>
             <p className="text-xs text-muted-foreground">Sistem Monitoring Pendidikan</p>
           </div>

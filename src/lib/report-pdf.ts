@@ -15,25 +15,23 @@ export interface ReportPdfOptions {
   notes?: { title: string; body: string }[]
 }
 
-function loadImage(dataUrl: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image()
-    image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error("Logo could not be loaded"))
-    image.src = dataUrl
-  })
-}
-
-export async function loadLogoDataUrl(): Promise<string | null> {
+export async function loadLogoDataUrl(): Promise<{ dataUrl: string; aspect: number } | null> {
   try {
-    const response = await fetch("/logo-mark.svg")
-    const svg = await response.text()
-    const image = await loadImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`)
-    const canvas = document.createElement("canvas")
-    canvas.width = 128
-    canvas.height = 128
-    canvas.getContext("2d")?.drawImage(image, 0, 0, 128, 128)
-    return canvas.toDataURL("image/png")
+    const response = await fetch("/image/logo-tpa-flat.png")
+    const blob = await response.blob()
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error("Logo could not be loaded"))
+      reader.readAsDataURL(blob)
+    })
+    const aspect = await new Promise<number>((resolve, reject) => {
+      const image = new Image()
+      image.onload = () => resolve(image.naturalWidth / image.naturalHeight)
+      image.onerror = () => reject(new Error("Logo could not be loaded"))
+      image.src = dataUrl
+    })
+    return { dataUrl, aspect }
   } catch {
     return null
   }
@@ -44,24 +42,39 @@ export async function createReportPdf({ filename, title, metadata, tables, notes
   const logo = await loadLogoDataUrl()
   const pageWidth = doc.internal.pageSize.getWidth()
   const margin = 14
-  let y = 16
+  let y = 14
 
+  // Kop surat: logo + nama TPA + alamat + kontak (centered)
   if (logo) {
-    doc.addImage(logo, "PNG", margin, y - 5, 17, 17)
+    const logoH = 22
+    const logoW = logo.aspect >= 1 ? logoH * Math.min(logo.aspect, 2.2) : logoH
+    doc.addImage(logo.dataUrl, "PNG", (pageWidth - logoW) / 2, y, logoW, logoH)
+    y += logoH + 4
   }
-
   doc.setTextColor(32, 41, 37)
   doc.setFont("helvetica", "bold")
-  doc.setFontSize(14)
-  doc.text("TPA BAITUL YATAMA", margin + (logo ? 22 : 0), y + 2)
+  doc.setFontSize(13)
+  doc.text("TAMAN PENDIDIKAN AL-QUR'AN", pageWidth / 2, y, { align: "center" })
+  y += 7
+  doc.setFontSize(16)
+  doc.text("BAITUL YATAMA", pageWidth / 2, y, { align: "center" })
+  y += 6
   doc.setFont("helvetica", "normal")
   doc.setFontSize(8)
-  doc.text("SISTEM MONITORING PENDIDIKAN", margin + (logo ? 22 : 0), y + 8)
+  const alamat = doc.splitTextToSize(
+    "Jl. Letjend Ryacudu Perum Korpri Blok B XI No 8, Kelurahan Korpri Raya Bandar Lampung 35131",
+    pageWidth - margin * 2
+  )
+  alamat.forEach((line: string) => {
+    doc.text(line, pageWidth / 2, y, { align: "center" })
+    y += 4
+  })
+  doc.text("Kontak: 085366886931", pageWidth / 2, y, { align: "center" })
+  y += 6
   doc.setDrawColor(55, 107, 89)
   doc.setLineWidth(0.5)
-  doc.line(margin, y + 15, pageWidth - margin, y + 15)
-
-  y += 25
+  doc.line(margin, y, pageWidth - margin, y)
+  y += 9
   doc.setFont("helvetica", "bold")
   doc.setFontSize(13)
   doc.text(title, margin, y)

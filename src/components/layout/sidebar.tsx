@@ -49,8 +49,8 @@ function Logo() {
     <div className="relative overflow-hidden border-b border-amber-400/30 bg-gradient-to-br from-primary via-teal-700 to-emerald-900 px-5 py-6">
       <div className="absolute inset-0" style={{ backgroundImage: `url("${ARABESQUE}")`, backgroundSize: "90px 90px" }} />
       <div className="absolute -right-8 -top-10 h-28 w-28 rounded-full border border-white/15" />
-      <div className="relative flex items-center gap-3">
-        <img src="/logo-mark.svg" alt="Logo TPA Baitul Yatama" className="h-10 w-10 rounded-md ring-1 ring-white/30" />
+      <div className="relative flex items-center gap-2.5">
+        <img src="/image/logo-tpa-transparent.png" alt="Logo TPA Baitul Yatama" className="h-10 w-auto object-contain" />
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold text-white truncate">Baitul Yatama</span>
           <span className="text-xs text-white/75 truncate">Sistem Monitoring Santri</span>

@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TPA Baitul Yatama",
   description: "Sistem Monitoring TPA Baitul Yatama",
-  icons: { icon: "/logo-mark.svg" },
+  icons: { icon: "/image/logo%20kemenag.png" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

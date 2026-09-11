@@ -68,7 +68,7 @@ export default function LaporanPage() {
       const { data: k } = await supabase.from("kelompok").select("id").eq("pengajar_id", pengajar.id);
       const kelompokIds = (k ?? []).map((x) => x.id);
       if (kelompokIds.length === 0) return;
-      const { data } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).order("nama");
+      const { data } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).eq("is_active", true).order("nama");
       setSantris((data ?? []) as SantriOpt[]);
     };
     loadSantris();

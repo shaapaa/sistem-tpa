@@ -168,6 +168,7 @@ create table santri (
   iuran numeric default 0,
   keterangan text,
   pendidikan_saat_ini text,
+  is_active boolean default true,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );

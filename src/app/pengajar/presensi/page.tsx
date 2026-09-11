@@ -44,7 +44,7 @@ export default function PresensiPage() {
       const kelompokIds = (kelompokData ?? []).map((k) => k.id);
       if (kelompokIds.length === 0) { setDailyLoading(false); setDailyRows([]); return; }
 
-      const { data: santriData } = await supabase.from("santri").select("id, nama, kelompok_id").in("kelompok_id", kelompokIds).order("nama");
+      const { data: santriData } = await supabase.from("santri").select("id, nama, kelompok_id").in("kelompok_id", kelompokIds).eq("is_active", true).order("nama");
       const santriList = (santriData ?? []) as unknown as Santri[];
       if (santriList.length === 0) { setDailyLoading(false); setDailyRows([]); return; }
       const santriIds = santriList.map((s) => s.id);

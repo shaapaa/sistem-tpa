@@ -50,7 +50,7 @@ export default function PengajarDashboard() {
       const kelompokIds = (kelompokData ?? []).map((k) => k.id);
       if (kelompokIds.length === 0) return;
 
-      const { data: santriRes } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).order("nama");
+      const { data: santriRes } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).eq("is_active", true).order("nama");
       type SantriRow = { id: string; nama: string }
       const santris = (santriRes ?? []) as unknown as SantriRow[]
       const santriIds = santris.map((s) => s.id)

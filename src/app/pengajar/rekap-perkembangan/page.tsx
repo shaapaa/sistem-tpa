@@ -74,7 +74,7 @@ export default function RekapPerkembanganPage() {
   useEffect(() => {
     const fetchSantris = async () => {
       if (!selectedKelompok) { setSantris([]); return; }
-      const { data } = await supabase.from("santri").select("id, nama").eq("kelompok_id", selectedKelompok).order("nama")
+      const { data } = await supabase.from("santri").select("id, nama").eq("kelompok_id", selectedKelompok).eq("is_active", true).order("nama")
       setSantris((data ?? []) as { id: string; nama: string }[])
       setSelectedSantri("")
     }
@@ -89,7 +89,7 @@ export default function RekapPerkembanganPage() {
       const { data: k } = await supabase.from("kelompok").select("id").eq("pengajar_id", pengajar.id)
       const kelompokIds = (k ?? []).map((x) => x.id)
       if (kelompokIds.length === 0) { setItems([]); return }
-      const { data: santriRes } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds)
+      const { data: santriRes } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).eq("is_active", true)
       type SantriRow = { id: string; nama: string }
       const santriRows = (santriRes ?? []) as unknown as SantriRow[]
       const santriIds = santriRows.map((s) => s.id)

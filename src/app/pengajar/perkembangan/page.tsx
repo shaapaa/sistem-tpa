@@ -106,7 +106,7 @@ export default function PerkembanganPage() {
   useEffect(() => {
     const fetchSantris = async () => {
       if (!selectedKelompok) { setSantris([]); return; }
-      const { data } = await supabase.from("santri").select("id, nama, kelompok_id").eq("kelompok_id", selectedKelompok).order("nama")
+      const { data } = await supabase.from("santri").select("id, nama, kelompok_id").eq("kelompok_id", selectedKelompok).eq("is_active", true).order("nama")
       setSantris((data ?? []) as Santri[])
       setSelectedSantri("")
       setSearch("")

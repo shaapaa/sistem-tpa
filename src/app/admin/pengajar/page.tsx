@@ -26,6 +26,7 @@ interface Pengajar {
 
 export default function PengajarPage() {
   const [pengajars, setPengajars] = useState<Pengajar[]>([])
+  const [kelompoks, setKelompoks] = useState<{ id: string; nama: string; pengajar_id: string | null; sesi?: { nama: string } | null; santri: { count: number }[] }[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Pengajar | null>(null)
@@ -55,11 +56,12 @@ export default function PengajarPage() {
   }
 
   const fetchData = async () => {
-    const { data } = await supabase
-      .from("pengajar")
-      .select("*, profiles(id, nama, role)")
-      .order("nama")
-    setPengajars(data ?? [])
+    const [data, kel] = await Promise.all([
+      supabase.from("pengajar").select("*, profiles(id, nama, role)").order("nama"),
+      supabase.from("kelompok").select("id, nama, pengajar_id, sesi(nama), santri(count)"),
+    ])
+    setPengajars(data.data ?? [])
+    setKelompoks((kel.data ?? []) as unknown as { id: string; nama: string; pengajar_id: string | null; sesi?: { nama: string } | null; santri: { count: number }[] }[])
     setLoading(false)
   }
 
@@ -206,6 +208,20 @@ export default function PengajarPage() {
                 </div>
                 {p.no_hp && <p className="text-xs text-muted-foreground">{p.no_hp}</p>}
                 {p.alamat && <p className="text-xs text-muted-foreground mt-0.5">{p.alamat}</p>}
+                {(() => {
+                  const owned = kelompoks.filter((k) => k.pengajar_id === p.id)
+                  if (owned.length === 0) return null
+                  return (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {owned.map((k) => (
+                        <span key={k.id} className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          {k.sesi?.nama === "PAGI" ? "Pagi" : k.sesi?.nama === "SORE" ? "Sore" : ""} · Kelompok {k.nama}
+                          <span className="text-primary/70">({(k.santri?.[0]?.count ?? 0)} santri)</span>
+                        </span>
+                      ))}
+                    </div>
+                  )
+                })()}
               </CardContent>
             </Card>
           ))}

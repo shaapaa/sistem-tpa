@@ -10,8 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Users, Search } from "lucide-react"
-import { formatGender } from "@/lib/format"
+import { Plus, Pencil, Trash2, Users, Search, Eye } from "lucide-react"
+import { formatGender, formatDate } from "@/lib/format"
 import { PageHeader } from "@/components/layout/page-header"
 import { DatePicker } from "@/components/ui/date-picker"
 import { FilterBar } from "@/components/layout/filter-bar"
@@ -40,6 +40,7 @@ interface Santri {
   iuran: number | null
   keterangan: string | null
   pendidikan_saat_ini: string | null
+  is_active: boolean | null
   kelompok?: { id: string; nama: string; sesi?: { nama: string } | null } | null
 }
 
@@ -56,8 +57,10 @@ export default function SantriPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Santri | null>(null)
   const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("ALL")
   const [confirmDel, setConfirmDel] = useState<Santri | null>(null)
   const [errorMsg, setErrorMsg] = useState("")
+  const [detail, setDetail] = useState<Santri | null>(null)
   const [form, setForm] = useState({
     nama: "",
     jenis_kelamin: "",
@@ -72,6 +75,7 @@ export default function SantriPage() {
     pekerjaan_ibu: "",
     iuran: "",
     pendidikan_saat_ini: "",
+    is_active: true,
   })
   const supabase = createClient()
 
@@ -105,7 +109,8 @@ export default function SantriPage() {
         pekerjaan_ayah: "", 
         pekerjaan_ibu: "", 
         iuran: "", 
-        pendidikan_saat_ini: "" })
+        pendidikan_saat_ini: "",
+        is_active: true })
     setDialogOpen(true)
   }
 
@@ -125,6 +130,7 @@ export default function SantriPage() {
       pekerjaan_ibu: s.pekerjaan_ibu ?? "",
       iuran: s.iuran?.toString() ?? "",
       pendidikan_saat_ini: s.pendidikan_saat_ini ?? "",
+      is_active: s.is_active !== false,
     })
     setDialogOpen(true)
   }
@@ -169,6 +175,7 @@ export default function SantriPage() {
       pekerjaan_ibu: form.pekerjaan_ibu || null,
       iuran: form.iuran ? parseFloat(form.iuran) : 0,
       pendidikan_saat_ini: form.pendidikan_saat_ini || null,
+      is_active: form.is_active,
     }
 
     if (editing) {
@@ -192,10 +199,12 @@ export default function SantriPage() {
     fetchData()
   }
 
-  const filtered = santris.filter((s) =>
-    s.nama.toLowerCase().includes(search.toLowerCase()) ||
-    (s.kelompok?.nama ?? "").toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = santris.filter((s) => {
+    const matchText = s.nama.toLowerCase().includes(search.toLowerCase()) ||
+      (s.kelompok?.nama ?? "").toLowerCase().includes(search.toLowerCase())
+    const matchStatus = statusFilter === "ALL" ? true : statusFilter === "AKTIF" ? s.is_active !== false : s.is_active === false
+    return matchText && matchStatus
+  })
 
   return (
     <div className="space-y-6">
@@ -208,6 +217,14 @@ export default function SantriPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Cari nama santri..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
       </div>
+      <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "ALL")} items={[{ label: "Semua Status", value: "ALL" }, { label: "Aktif", value: "AKTIF" }, { label: "Non-aktif", value: "NONAKTIF" }]}>
+        <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALL">Semua Status</SelectItem>
+          <SelectItem value="AKTIF">Aktif</SelectItem>
+          <SelectItem value="NONAKTIF">Non-aktif</SelectItem>
+        </SelectContent>
+      </Select>
       </FilterBar>
 
       {loading ? (
@@ -227,6 +244,9 @@ export default function SantriPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary text-sm font-semibold">{s.nama.charAt(0)}</div>
                   <div className="flex gap-1">
+                    <button onClick={(e) => { e.stopPropagation(); setDetail(s); }} className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200" title="Detail">
+                      <Eye className="h-4 w-4" />
+                    </button>
                     <button onClick={(e) => { e.stopPropagation(); openEdit(s); }} className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200">
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -240,6 +260,7 @@ export default function SantriPage() {
                   {s.kelompok && <Badge variant="outline" className="text-[10px]">{kelompokLabel(s.kelompok)}</Badge>}
                   <Badge variant="secondary" className="text-[10px]">{s.keterangan === "IQRA" ? "Iqra" : s.keterangan === "QURAN" ? "Al-Quran" : "-"}</Badge>
                   <Badge variant="secondary" className="text-[10px]">{formatGender(s.jenis_kelamin)}</Badge>
+                  {s.is_active === false && <Badge variant="destructive" className="text-[10px]">Non-aktif</Badge>}
                 </div>
                 {(s.nama_ayah || s.nama_ibu) && (
                   <p className="text-xs text-muted-foreground">Wali: {s.nama_ayah ?? "-"} / {s.nama_ibu ?? "-"}</p>
@@ -344,10 +365,57 @@ export default function SantriPage() {
               <Label>No. HP Wali</Label>
               <Input value={form.no_hp_wali} onChange={(e) => setForm({ ...form, no_hp_wali: e.target.value })} className="h-9" placeholder="08xx-xxxx-xxxx" />
             </div>
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Status Aktif</p>
+                <p className="text-xs text-muted-foreground">{form.is_active ? "Santri aktif mengikuti kegiatan" : "Santri non-aktif (tidak tampil di pemantauan aktif)"}</p>
+              </div>
+              <Button type="button" variant={form.is_active ? "default" : "outline"} size="sm" onClick={() => setForm({ ...form, is_active: !form.is_active })} className="h-8">
+                {form.is_active ? "Aktif" : "Non-aktif"}
+              </Button>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="h-9">Batal</Button>
             <Button onClick={handleSave} className="h-9">{editing ? "Simpan Perubahan" : "Tambah Santri"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
+        <DialogContent className="max-w-md animate-scale-in">
+          <DialogHeader>
+            <DialogTitle>Detail Santri</DialogTitle>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-lg font-bold text-primary">{detail.nama.charAt(0)}</div>
+                <div>
+                  <p className="font-semibold text-foreground">{detail.nama}</p>
+                  <p className="text-xs text-muted-foreground">{detail.kelompok ? kelompokLabel(detail.kelompok) : "-"} · {detail.keterangan === "IQRA" ? "Iqra" : detail.keterangan === "QURAN" ? "Al-Quran" : "-"}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <Info label="Jenis Kelamin" value={formatGender(detail.jenis_kelamin)} />
+                <Info label="Tanggal Lahir" value={detail.tanggal_lahir ? formatDate(detail.tanggal_lahir) : "-"} />
+                <Info label="Pendidikan" value={detail.pendidikan_saat_ini ?? "-"} />
+                <Info label="Iuran/Infaq" value={detail.iuran ? `Rp ${detail.iuran.toLocaleString("id-ID")}` : "-"} />
+                <Info label="Nama Ayah" value={detail.nama_ayah ?? "-"} />
+                <Info label="Pekerjaan Ayah" value={detail.pekerjaan_ayah ?? "-"} />
+                <Info label="Nama Ibu" value={detail.nama_ibu ?? "-"} />
+                <Info label="Pekerjaan Ibu" value={detail.pekerjaan_ibu ?? "-"} />
+                <Info label="No. HP Wali" value={detail.no_hp_wali ?? "-"} />
+                <Info label="Status" value={detail.is_active === false ? "Non-aktif" : "Aktif"} />
+              </div>
+              <div>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Alamat</p>
+                <p className="text-sm text-foreground">{detail.alamat ?? "-"}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetail(null)} className="h-9">Tutup</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -370,6 +438,15 @@ export default function SantriPage() {
         message={errorMsg}
         confirmLabel="OK"
       />
+    </div>
+  )
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="font-medium text-foreground">{value}</p>
     </div>
   )
 }

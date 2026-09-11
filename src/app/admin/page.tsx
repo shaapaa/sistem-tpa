@@ -46,9 +46,9 @@ export default function AdminDashboard() {
     const fetchData = async () => {
       const monthStart = currentMonthStart()
       const [santriC, pengajarC, santriList, presensiRes, jadwalRes, bacaanRes, cicilanRes, doaRes, salatRes] = await Promise.all([
-        supabase.from("santri").select("id", { count: "exact", head: true }),
+        supabase.from("santri").select("id", { count: "exact", head: true }).eq("is_active", true),
         supabase.from("pengajar").select("id", { count: "exact", head: true }),
-        supabase.from("santri").select("id, nama, kelompok(sesi(nama))"),
+        supabase.from("santri").select("id, nama, kelompok(sesi(nama))").eq("is_active", true),
         supabase.from("presensi").select("status, santri_id, tanggal, kelompok_id, kelompok(sesi(nama))"),
         supabase.from("jadwal").select("hari, jam_mulai, jam_selesai, kelompok(nama, sesi(nama), pengajar(nama))"),
         supabase.from("perkembangan_bacaan").select("santri_id, status, tanggal"),
