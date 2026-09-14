@@ -148,6 +148,14 @@ export default function PerkembanganPage() {
   const handleSaveBacaan = async () => {
     if (!selectedSantri || !user) return
     setErrorMsg("")
+    if (jenisBacaan === "IQRA") {
+      if (!iqraJilid || !iqraHalaman) { setErrorMsg("Jilid dan halaman wajib diisi"); return }
+    } else {
+      if (!quranSuratId || !quranJuz) { setErrorMsg("Surat dan juz wajib diisi"); return }
+      const mulai = parseInt(quranAyatMulai) || 0
+      const selesai = parseInt(quranAyatSelesai) || 0
+      if (mulai && selesai && selesai < mulai) { setErrorMsg("Ayat selesai tidak boleh kurang dari ayat mulai"); return }
+    }
     setSaving(true); setSaved(false)
     const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
     if (!pengajar) { setSaving(false); return }
@@ -234,6 +242,7 @@ export default function PerkembanganPage() {
   const handleSaveSholat = async () => {
     if (!selectedSantri || !user) return
     setErrorMsg("")
+    if (!jenisSalatId) { setErrorMsg("Pilih minimal satu jenis salat"); return }
     setSaving(true); setSaved(false)
     const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
     if (!pengajar) { setSaving(false); return }
@@ -408,6 +417,7 @@ export default function PerkembanganPage() {
                   <Label>Catatan (Opsional)</Label>
                   <Textarea value={catatanBacaan} onChange={(e) => setCatatanBacaan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
+                {errorMsg && <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
                 <Button onClick={handleSaveBacaan} disabled={saving} className="h-9 px-4">
                   {saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
                 </Button>
@@ -536,6 +546,7 @@ export default function PerkembanganPage() {
                   <Label>Catatan (Opsional)</Label>
                   <Textarea value={catatanSholat} onChange={(e) => setCatatanSholat(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
+                {errorMsg && <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
                 <Button onClick={handleSaveSholat} disabled={saving} className="h-9 px-4">
                   {saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
                 </Button>

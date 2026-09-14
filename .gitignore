@@ -48,3 +48,8 @@ next-env.d.ts
 # build artifacts
 build.log
 dev.log
+
+# Playwright
+test-results/
+e2e-report/
+playwright-report/

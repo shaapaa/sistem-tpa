@@ -184,6 +184,7 @@ export default function LaporanPage() {
     : "Belum ada catatan bacaan";
 
   const reportReady = reportKey > 0;
+  const noData = presensis.length === 0 && bacaans.length === 0 && cicilans.length === 0 && doas.length === 0 && komponenRows.length === 0 && praktiks.length === 0;
 
   const handlePrint = async () => {
     if (!santri) return;
@@ -225,7 +226,7 @@ tables: [
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Laporan santri" title="Laporan Perkembangan Santri" description="Buat dan lihat laporan perkembangan santri berdasarkan periode pembelajaran." backHref="/pengajar" action={<Button onClick={handlePrint} className="h-9 px-4" disabled={!reportReady}><Download className="mr-2 h-4 w-4" /> Cetak PDF</Button>} />
+      <PageHeader eyebrow="Laporan santri" title="Laporan Perkembangan Santri" description="Buat dan lihat laporan perkembangan santri berdasarkan periode pembelajaran." backHref="/pengajar" action={<Button onClick={handlePrint} className="h-9 px-4" disabled={!reportReady || noData}><Download className="mr-2 h-4 w-4" /> Cetak PDF</Button>} />
 
       <div className="surface-panel p-4 sm:p-5">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

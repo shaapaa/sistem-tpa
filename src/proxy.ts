@@ -36,6 +36,15 @@ export async function proxy(request: NextRequest) {
   const isProtected = protectedRoutes.some((r) => path.startsWith(r));
   const isPublic = publicRoutes.some((r) => path.startsWith(r));
 
+  // Role user dari profil (untuk redirect sesuai peran)
+  const { data: profile } = user
+    ? await supabase.from("profiles").select("role").eq("id", user.id).single()
+    : { data: null };
+  const role = profile?.role as "ADMIN" | "PENGAJAR" | "SANTRI" | undefined;
+  const roleHome: Record<string, string> = { ADMIN: "/admin", PENGAJAR: "/pengajar", SANTRI: "/orang-tua" };
+  const home = role ? roleHome[role] ?? "/login" : "/login";
+  const routeRole = path.startsWith("/admin") ? "ADMIN" : path.startsWith("/pengajar") ? "PENGAJAR" : "SANTRI";
+
   // Redirect unauthenticated users away from protected routes
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
@@ -43,11 +52,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from public routes
-  if (isPublic && user && !request.nextUrl.pathname.startsWith("/admin")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/admin";
-    return NextResponse.redirect(url);
+  // Redirect authenticated users away from public routes ke home sesuai role
+  if (isPublic && user) {
+    return NextResponse.redirect(new URL(home, request.url));
+  }
+
+  // Redirect user yang salah role dari rute terproteksi ke home sesuai role
+  if (isProtected && user && role && role !== routeRole) {
+    return NextResponse.redirect(new URL(home, request.url));
   }
 
   return supabaseResponse;

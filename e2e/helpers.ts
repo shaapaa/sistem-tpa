@@ -1,4 +1,4 @@
-import { Page, expect } from "@playwright/test"
+import { test, Page, expect } from "@playwright/test"
 
 export const CREDS = {
   admin: {
@@ -23,8 +23,8 @@ export type Role = keyof typeof CREDS
 export async function login(page: Page, role: Role) {
   const c = CREDS[role]
   await page.goto("/login")
-  await page.getByLabel("Email").fill(c.email)
-  await page.getByLabel("Password").fill(c.password)
+  await page.locator("#email").fill(c.email)
+  await page.locator("#password").fill(c.password)
   await page.getByRole("button", { name: "Masuk" }).click()
   await page.waitForURL((u) => u.pathname === c.home, { timeout: 30_000 })
 }
@@ -45,4 +45,4 @@ export function uniq(prefix: string) {
   return `${prefix}-${Date.now().toString().slice(-6)}`
 }
 
-export { expect }
+export { expect, test }
