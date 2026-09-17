@@ -37,7 +37,54 @@ export function formatIslamicDate(d: Date = new Date()): { masehi: string; maseh
   } catch {
     hijri = ""
   }
+  // If Intl didn't yield a Hijri date, fall back to an algorithmic conversion
+  // (arithmetical Umm al-Qura approximation) to ensure mobile shows a value.
+  if (!hijri) {
+    try {
+      const hijriDate = gregorianToHijri(d)
+      const HIJRI_MONTHS = [
+        "Muharram",
+        "Safar",
+        "Rabi'ul Awwal",
+        "Rabi'ul Akhir",
+        "Jumada I",
+        "Jumada II",
+        "Rajab",
+        "Sya'ban",
+        "Ramadhan",
+        "Syawal",
+        "Dzulqa'dah",
+        "Dzulhijjah",
+      ]
+      hijri = `${hijriDate.day} ${HIJRI_MONTHS[hijriDate.month - 1]} ${hijriDate.year}`
+    } catch {
+      // ignore
+    }
+  }
   return { masehi, masehiShort, hijri }
+}
+
+function gregorianToHijri(d: Date) {
+  // Algorithm adapted from publicly available conversion formulas.
+  const day = d.getUTCDate()
+  const month = d.getUTCMonth() + 1
+  const year = d.getUTCFullYear()
+
+  const a = Math.floor((14 - month) / 12)
+  const y = year + 4800 - a
+  const m = month + 12 * a - 3
+  let jd = day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045
+
+  let l = jd - 1948440 + 10632
+  const n = Math.floor((l - 1) / 10631)
+  l = l - 10631 * n + 354
+  let j = (Math.floor((10985 - l) / 5316)) * (Math.floor((50 * l) / 17719)) + (Math.floor(l / 5670)) * (Math.floor((43 * l) / 15238))
+  l = l - (Math.floor((30 - j) / 15)) * (Math.floor((17719 * j) / 50)) - (Math.floor(j / 16)) * (Math.floor((15238 * j) / 43)) + 29
+  const mH = Math.floor((24 * l) / 709)
+  const dH = l - Math.floor((709 * mH) / 24)
+  const yH = 30 * n + j - 30
+
+  return { day: dH, month: mH, year: yH }
 }
 
 export const HADITH_QUOTES: { t: string; s: string }[] = [
