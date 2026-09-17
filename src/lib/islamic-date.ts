@@ -3,7 +3,31 @@ export function formatIslamicDate(d: Date = new Date()): { masehi: string; maseh
   const masehiShort = d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
   let hijri = ""
   try {
-    hijri = new Intl.DateTimeFormat("id-ID-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" }).format(d)
+    // Try a list of locale tags with the Islamic Umm al-Qura calendar.
+    // Some mobile browsers ignore the Unicode extension in certain forms
+    // (especially with region subtags), so try several variants and pick
+    // the first formatted result that does not equal the Gregorian output.
+    const candidates = [
+      "id-u-ca-islamic-umalqura",
+      "id-ID-u-ca-islamic-umalqura",
+      "ar-SA-u-ca-islamic-umalqura",
+      "en-u-ca-islamic-umalqura",
+    ]
+    const gregorianYear = String(d.getFullYear())
+    for (const loc of candidates) {
+      try {
+        const formatted = new Intl.DateTimeFormat(loc, { day: "numeric", month: "long", year: "numeric" }).format(d)
+        // Basic sanity: if browser ignored the calendar extension it may
+        // return the Gregorian date (contains the gregorian year). Skip
+        // those results and accept the first one that looks like a Hijri date.
+        if (formatted && !formatted.includes(gregorianYear)) {
+          hijri = formatted
+          break
+        }
+      } catch {
+        // ignore and try next locale
+      }
+    }
   } catch {
     hijri = ""
   }
