@@ -1,4 +1,7 @@
+"use client"
+
 import Link from "next/link"
+import { useEffect, useState } from "react"
 import { ArrowLeft, Menu, MoonStar } from "lucide-react"
 import { formatIslamicDate } from "@/lib/islamic-date"
 import { useAppNav } from "@/components/layout/app-nav-context"
@@ -13,7 +16,11 @@ interface PageHeaderProps {
 
 export function PageHeader({ eyebrow, title, description, backHref, action }: PageHeaderProps) {
   const { openMenu } = useAppNav()
-  const { masehiShort, hijri } = formatIslamicDate()
+  const [date, setDate] = useState(() => ({ masehiShort: "", hijri: "" }))
+
+  useEffect(() => {
+    setDate(formatIslamicDate())
+  }, [])
 
   return (
     <header className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-primary/[0.06] px-3.5 py-3 sm:px-6 sm:py-6">
@@ -45,11 +52,11 @@ export function PageHeader({ eyebrow, title, description, backHref, action }: Pa
                   {eyebrow}
                 </p>
               )}
-              {masehiShort && <span className="hidden items-center gap-1 text-[10px] font-medium tracking-[0.04em] text-muted-foreground sm:inline-flex"><MoonStar className="h-3 w-3 text-amber-600/70" />{masehiShort}</span>}
-              {hijri && <span className="hidden items-center gap-1 text-[10px] font-medium tracking-[0.04em] text-muted-foreground sm:inline-flex">· {hijri}</span>}
+              {date.masehiShort && <span className="hidden items-center gap-1 text-[10px] font-medium tracking-[0.04em] text-muted-foreground sm:inline-flex"><MoonStar className="h-3 w-3 text-amber-600/70" />{date.masehiShort}</span>}
+              {date.hijri && <span className="hidden items-center gap-1 text-[10px] font-medium tracking-[0.04em] text-muted-foreground sm:inline-flex">· {date.hijri}</span>}
             </div>
             <h1 className="mt-1 text-lg font-semibold leading-tight tracking-[-0.03em] text-foreground sm:mt-2 sm:text-[1.9rem]">{title}</h1>
-            {(masehiShort || hijri) && <p className="mt-1 text-[10px] font-medium text-muted-foreground sm:hidden">{masehiShort}{hijri ? ` · ${hijri}` : ""}</p>}
+            {(date.masehiShort || date.hijri) && <p className="mt-1 text-[10px] font-medium text-muted-foreground sm:hidden">{date.masehiShort}{date.hijri ? ` · ${date.hijri}` : ""}</p>}
             {description && <p className="mt-1 hidden max-w-[62ch] text-sm leading-6 text-muted-foreground sm:block">{description}</p>}
           </div>
         </div>
