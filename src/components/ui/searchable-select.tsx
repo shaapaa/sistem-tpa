@@ -45,13 +45,20 @@ export function SearchableSelect({ value, onChange, placeholder = "Pilih", optio
       setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false) }
+    const initialWidth = window.innerWidth
+    const onResize = () => {
+      // Only close the menu on width changes (likely orientation change),
+      // not on height-only resizes such as mobile virtual keyboard opening.
+      if (window.innerWidth !== initialWidth) setOpen(false)
+    }
+
     document.addEventListener("mousedown", close)
     document.addEventListener("keydown", onKey)
-    window.addEventListener("resize", () => setOpen(false))
+    window.addEventListener("resize", onResize)
     return () => {
       document.removeEventListener("mousedown", close)
       document.removeEventListener("keydown", onKey)
-      window.removeEventListener("resize", () => setOpen(false))
+      window.removeEventListener("resize", onResize)
     }
   }, [open])
 
