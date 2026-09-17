@@ -16,10 +16,16 @@ export function formatIslamicDate(d: Date = new Date()): { masehi: string; maseh
     const gregorianYear = String(d.getFullYear())
     for (const loc of candidates) {
       try {
-        const formatted = new Intl.DateTimeFormat(loc, { day: "numeric", month: "long", year: "numeric" }).format(d)
-        // Basic sanity: if browser ignored the calendar extension it may
-        // return the Gregorian date (contains the gregorian year). Skip
-        // those results and accept the first one that looks like a Hijri date.
+        const dtf = new Intl.DateTimeFormat(loc, { day: "numeric", month: "long", year: "numeric" })
+        const formatted = dtf.format(d)
+        const cal = dtf.resolvedOptions?.().calendar
+        // Prefer results where the resolved calendar is an Islamic variant.
+        if (cal && /islamic/i.test(cal)) {
+          hijri = formatted
+          break
+        }
+        // Fallback sanity: sometimes resolvedOptions isn't reliable; accept
+        // formatted result if it doesn't contain the Gregorian year.
         if (formatted && !formatted.includes(gregorianYear)) {
           hijri = formatted
           break
