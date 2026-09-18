@@ -34,6 +34,10 @@ const KURANG_STATUS = [
   { label: "Butuh Bimbingan", value: "BUTUH_BIMBINGAN" },
 ];
 
+function saveErrorMessage(error: { message?: string } | null, fallback: string) {
+  return error?.message ? `${fallback}: ${error.message}` : fallback
+}
+
 export default function PerkembanganPage() {
   const { user } = useAuth();
   const [kelompoks, setKelompoks] = useState<Kelompok[]>([]);
@@ -75,6 +79,8 @@ export default function PerkembanganPage() {
   const [statusSholat, setStatusSholat] = useState("LANCAR");
   const [catatanSholat, setCatatanSholat] = useState("");
   const [komponenStatus, setKomponenStatus] = useState<Record<string, string>>({});
+  const [latestKomponenStatus, setLatestKomponenStatus] = useState<Record<string, { status: string; tanggal: string }>>({});
+  const [reviewKomponen, setReviewKomponen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchMasters = async () => {
@@ -126,6 +132,33 @@ export default function PerkembanganPage() {
     loadAyatMulai()
   }, [selectedSantri, suratId])
 
+  // Komponen yang terakhir dinilai Lancar dianggap tuntas; hanya dibuka lagi
+  // bila pengajar memang ingin melakukan penilaian ulang.
+  useEffect(() => {
+    const loadLatestKomponenStatus = async () => {
+      if (!selectedSantri) {
+        setLatestKomponenStatus({})
+        setReviewKomponen({})
+        return
+      }
+      const { data } = await supabase
+        .from("perkembangan_salat_komponen")
+        .select("komponen_salat_id, status, tanggal, created_at")
+        .eq("santri_id", selectedSantri)
+        .order("tanggal", { ascending: false })
+        .order("created_at", { ascending: false })
+
+      const latest: Record<string, { status: string; tanggal: string }> = {}
+      ;((data ?? []) as { komponen_salat_id: string; status: string; tanggal: string }[]).forEach((row) => {
+        if (!latest[row.komponen_salat_id]) latest[row.komponen_salat_id] = { status: row.status, tanggal: row.tanggal }
+      })
+      setLatestKomponenStatus(latest)
+      setReviewKomponen({})
+      setKomponenStatus({})
+    }
+    loadLatestKomponenStatus()
+  }, [selectedSantri])
+
   const filteredSantris = santris.filter((s) => s.nama.toLowerCase().includes(search.toLowerCase()))
 
   const today = new Date().toISOString().split("T")[0]
@@ -133,24 +166,48 @@ export default function PerkembanganPage() {
   // Adanya inputan perkembangan pada hari itu = santri hadir.
   // Set/upsert presensi HADIR (menimpa status non-hadir bila ada inputan perkembangan).
   const autoPresensi = async (santriId: string, pengajarId: string) => {
-    try {
-      const santri = santris.find((s) => s.id === santriId)
-      await supabase.from("presensi").upsert({
-        santri_id: santriId,
-        tanggal: today,
-        status: "HADIR",
-        pengajar_id: pengajarId,
-        kelompok_id: santri?.kelompok_id ?? null,
-      }, { onConflict: "santri_id,tanggal" })
-    } catch { /* best effort */ }
+    const santri = santris.find((s) => s.id === santriId)
+    const { error } = await supabase.from("presensi").upsert({
+      santri_id: santriId,
+      tanggal: today,
+      status: "HADIR",
+      pengajar_id: pengajarId,
+      kelompok_id: santri?.kelompok_id ?? null,
+    }, { onConflict: "santri_id,tanggal" })
+    return error
   }
 
   const handleSaveBacaan = async () => {
     if (!selectedSantri || !user) return
     setErrorMsg("")
+    const iqraHalamanNumber = Number(iqraHalaman)
+    const quranJuzNumber = Number(quranJuz)
+    const quranAyatMulaiNumber = Number(quranAyatMulai)
+    const quranAyatSelesaiNumber = Number(quranAyatSelesai)
+    const quranSurat = surats.find((s) => s.id === quranSuratId)
+
+    if (jenisBacaan === "IQRA" && (!iqraJilid || !Number.isInteger(iqraHalamanNumber) || iqraHalamanNumber < 1)) {
+      setErrorMsg("Jilid dan halaman wajib diisi")
+      return
+    }
+    if (jenisBacaan === "QURAN") {
+      if (!quranSuratId || !Number.isInteger(quranJuzNumber) || quranJuzNumber < 1 || quranJuzNumber > 30 || !Number.isInteger(quranAyatMulaiNumber) || !Number.isInteger(quranAyatSelesaiNumber)) {
+        setErrorMsg("Surah, juz, ayat mulai, dan ayat selesai wajib diisi")
+        return
+      }
+      if (quranAyatMulaiNumber < 1 || quranAyatSelesaiNumber < quranAyatMulaiNumber) {
+        setErrorMsg("Ayat selesai tidak boleh kurang dari ayat mulai")
+        return
+      }
+      if (quranSurat && quranAyatSelesaiNumber > quranSurat.jumlah_ayat) {
+        setErrorMsg(`Ayat melebihi jumlah ayat surah ${quranSurat.nama} (hanya ${quranSurat.jumlah_ayat} ayat)`)
+        return
+      }
+    }
+
     setSaving(true); setSaved(false)
     const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
-    if (!pengajar) { setSaving(false); return }
+    if (!pengajar) { setErrorMsg("Profil pengajar tidak ditemukan"); setSaving(false); return }
     const payload: Record<string, unknown> = {
       santri_id: selectedSantri,
       pengajar_id: pengajar.id,
@@ -161,15 +218,17 @@ export default function PerkembanganPage() {
     }
     if (jenisBacaan === "IQRA") {
       payload.jilid = parseInt(iqraJilid) || null
-      payload.halaman = parseInt(iqraHalaman) || null
+      payload.halaman = iqraHalamanNumber
     } else {
       payload.surat_id = quranSuratId || null
-      payload.juz = parseInt(quranJuz) || null
-      payload.ayat_mulai = parseInt(quranAyatMulai) || null
-      payload.ayat_selesai = parseInt(quranAyatSelesai) || null
+      payload.juz = quranJuzNumber
+      payload.ayat_mulai = quranAyatMulaiNumber
+      payload.ayat_selesai = quranAyatSelesaiNumber
     }
-    await supabase.from("perkembangan_bacaan").insert(payload)
-    await autoPresensi(selectedSantri, pengajar.id)
+    const { error } = await supabase.from("perkembangan_bacaan").insert(payload)
+    if (error) { setErrorMsg(saveErrorMessage(error, "Perkembangan bacaan gagal disimpan")); setSaving(false); return }
+    const presensiError = await autoPresensi(selectedSantri, pengajar.id)
+    if (presensiError) { setErrorMsg(saveErrorMessage(presensiError, "Bacaan tersimpan, tetapi presensi otomatis gagal")); setSaving(false); return }
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
     setCatatanBacaan(""); setIqraJilid(""); setIqraHalaman(""); setQuranSuratId(""); setQuranJuz(""); setQuranAyatMulai(""); setQuranAyatSelesai("")
   }
@@ -196,28 +255,29 @@ export default function PerkembanganPage() {
     }
     setSaving(true); setSaved(false)
     const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
-    if (!pengajar) { setSaving(false); return }
+    if (!pengajar) { setErrorMsg("Profil pengajar tidak ditemukan"); setSaving(false); return }
     if (jenisHafalan === "SURAT") {
-      const { data: hs } = await supabase.from("hafalan_santri").select("id").eq("santri_id", selectedSantri).eq("surat_id", suratId).maybeSingle()
+      const { data: hs, error: hafalanError } = await supabase.from("hafalan_santri").select("id").eq("santri_id", selectedSantri).eq("surat_id", suratId).maybeSingle()
+      if (hafalanError) { setErrorMsg(saveErrorMessage(hafalanError, "Data hafalan gagal dimuat")); setSaving(false); return }
       let hsId = hs?.id
       if (!hsId) {
-        const { data: created } = await supabase.from("hafalan_santri").insert({ santri_id: selectedSantri, surat_id: suratId }).select("id").single()
+        const { data: created, error: createError } = await supabase.from("hafalan_santri").insert({ santri_id: selectedSantri, surat_id: suratId }).select("id").single()
+        if (createError || !created) { setErrorMsg(saveErrorMessage(createError, "Data hafalan surat gagal dibuat")); setSaving(false); return }
         hsId = created?.id
       }
-      if (hsId) {
-        await supabase.from("hafalan_surat_cicilan").insert({
-          hafalan_santri_id: hsId,
-          pengajar_id: pengajar.id,
-          tanggal: today,
-          ayat_mulai: mulai,
-          ayat_selesai: sampai,
-          status: statusHafalan,
-          jenis: "setoran_baru",
-          catatan: catatanHafalan || null,
-        })
-      }
+      const { error } = await supabase.from("hafalan_surat_cicilan").insert({
+        hafalan_santri_id: hsId,
+        pengajar_id: pengajar.id,
+        tanggal: today,
+        ayat_mulai: mulai,
+        ayat_selesai: sampai,
+        status: statusHafalan,
+        jenis: "setoran_baru",
+        catatan: catatanHafalan || null,
+      })
+      if (error) { setErrorMsg(saveErrorMessage(error, "Setoran hafalan gagal disimpan")); setSaving(false); return }
     } else {
-      await supabase.from("perkembangan_hafalan_doa").insert({
+      const { error } = await supabase.from("perkembangan_hafalan_doa").insert({
         santri_id: selectedSantri,
         doa_id: doaId,
         pengajar_id: pengajar.id,
@@ -225,8 +285,10 @@ export default function PerkembanganPage() {
         status: statusHafalan,
         catatan: catatanHafalan || null,
       })
+      if (error) { setErrorMsg(saveErrorMessage(error, "Hafalan doa gagal disimpan")); setSaving(false); return }
     }
-    await autoPresensi(selectedSantri, pengajar.id)
+    const presensiError = await autoPresensi(selectedSantri, pengajar.id)
+    if (presensiError) { setErrorMsg(saveErrorMessage(presensiError, "Hafalan tersimpan, tetapi presensi otomatis gagal")); setSaving(false); return }
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
     setSuratId(""); setAyatMulai(""); setAyatSelesai(""); setDoaId(""); setCatatanHafalan("")
   }
@@ -234,25 +296,28 @@ export default function PerkembanganPage() {
   const handleSaveSholat = async () => {
     if (!selectedSantri || !user) return
     setErrorMsg("")
+    const selectedKomponens = Object.entries(komponenStatus).filter(([, status]) => Boolean(status))
+    if (selectedKomponens.length === 0 && !jenisSalatId) {
+      setErrorMsg("Pilih minimal satu jenis salat atau komponen")
+      return
+    }
     setSaving(true); setSaved(false)
     const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
-    if (!pengajar) { setSaving(false); return }
+    if (!pengajar) { setErrorMsg("Profil pengajar tidak ditemukan"); setSaving(false); return }
     // Level 1: komponen salat
-    for (const komponen of komponens) {
-      const st = komponenStatus[komponen.id]
-      if (st) {
-        await supabase.from("perkembangan_salat_komponen").insert({
-          santri_id: selectedSantri,
-          komponen_salat_id: komponen.id,
-          pengajar_id: pengajar.id,
-          tanggal: today,
-          status: st,
-        })
-      }
+    if (selectedKomponens.length > 0) {
+      const { error } = await supabase.from("perkembangan_salat_komponen").insert(selectedKomponens.map(([komponenId, status]) => ({
+        santri_id: selectedSantri,
+        komponen_salat_id: komponenId,
+        pengajar_id: pengajar.id,
+        tanggal: today,
+        status,
+      })))
+      if (error) { setErrorMsg(saveErrorMessage(error, "Penilaian komponen salat gagal disimpan")); setSaving(false); return }
     }
     // Level 2: praktik salat keseluruhan
     if (jenisSalatId) {
-      await supabase.from("praktik_salat").insert({
+      const { error } = await supabase.from("praktik_salat").insert({
         santri_id: selectedSantri,
         jenis_salat_id: jenisSalatId,
         pengajar_id: pengajar.id,
@@ -260,8 +325,21 @@ export default function PerkembanganPage() {
         status: statusSholat,
         catatan: catatanSholat || null,
       })
+      if (error) { setErrorMsg(saveErrorMessage(error, "Praktik salat gagal disimpan")); setSaving(false); return }
     }
-    await autoPresensi(selectedSantri, pengajar.id)
+    const presensiError = await autoPresensi(selectedSantri, pengajar.id)
+    if (presensiError) { setErrorMsg(saveErrorMessage(presensiError, "Penilaian salat tersimpan, tetapi presensi otomatis gagal")); setSaving(false); return }
+    if (selectedKomponens.length > 0) {
+      setLatestKomponenStatus((prev) => ({
+        ...prev,
+        ...Object.fromEntries(selectedKomponens.map(([komponenId, status]) => [komponenId, { status, tanggal: today }])),
+      }))
+      setReviewKomponen((prev) => {
+        const next = { ...prev }
+        selectedKomponens.forEach(([komponenId]) => delete next[komponenId])
+        return next
+      })
+    }
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
     setJenisSalatId(""); setCatatanSholat(""); setKomponenStatus({})
   }
@@ -408,6 +486,7 @@ export default function PerkembanganPage() {
                   <Label>Catatan (Opsional)</Label>
                   <Textarea value={catatanBacaan} onChange={(e) => setCatatanBacaan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
+                {errorMsg && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
                 <Button onClick={handleSaveBacaan} disabled={saving} className="h-9 px-4">
                   {saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
                 </Button>
@@ -464,7 +543,7 @@ export default function PerkembanganPage() {
                   </div>
                 )}
 
-                {errorMsg && <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
+                {errorMsg && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
 
                 <div className="space-y-2">
                   <Label>Status</Label>
@@ -496,18 +575,27 @@ export default function PerkembanganPage() {
                     {komponens.map((k) => (
                       <div key={k.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
                         <span className="text-sm font-medium text-foreground">{k.nama}</span>
-                        <div className="flex gap-1.5">
-                          {KURANG_STATUS.map((st) => (
-                            <button
-                              key={st.value}
-                              type="button"
-                              onClick={() => setKomponenStatus((prev) => ({ ...prev, [k.id]: prev[k.id] === st.value ? "" : st.value }))}
-                              className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${komponenStatus[k.id] === st.value ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
-                            >
-                              {st.label}
+                        {latestKomponenStatus[k.id]?.status === "LANCAR" && !reviewKomponen[k.id] ? (
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Sudah lancar</span>
+                            <button type="button" onClick={() => setReviewKomponen((prev) => ({ ...prev, [k.id]: true }))} className="text-xs font-medium text-primary hover:underline">
+                              Nilai ulang
                             </button>
-                          ))}
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1.5">
+                            {KURANG_STATUS.map((st) => (
+                              <button
+                                key={st.value}
+                                type="button"
+                                onClick={() => setKomponenStatus((prev) => ({ ...prev, [k.id]: prev[k.id] === st.value ? "" : st.value }))}
+                                className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${komponenStatus[k.id] === st.value ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+                              >
+                                {st.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -532,6 +620,7 @@ export default function PerkembanganPage() {
                     </Select>
                   </div>
                 </div>
+                {errorMsg && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
                 <div className="space-y-2">
                   <Label>Catatan (Opsional)</Label>
                   <Textarea value={catatanSholat} onChange={(e) => setCatatanSholat(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />

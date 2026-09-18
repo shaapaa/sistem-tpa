@@ -3,36 +3,26 @@ export function formatIslamicDate(d: Date = new Date()): { masehi: string; maseh
   const masehiShort = d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
   let hijri = ""
   try {
-    // Try a list of locale tags with the Islamic Umm al-Qura calendar.
-    // Some mobile browsers ignore the Unicode extension in certain forms
-    // (especially with region subtags), so try several variants and pick
-    // the first formatted result that does not equal the Gregorian output.
-    const candidates = [
-      "id-u-ca-islamic-umalqura",
-      "id-ID-u-ca-islamic-umalqura",
-      "ar-SA-u-ca-islamic-umalqura",
-      "en-u-ca-islamic-umalqura",
-    ]
-    const gregorianYear = String(d.getFullYear())
-    for (const loc of candidates) {
-      try {
-        const dtf = new Intl.DateTimeFormat(loc, { day: "numeric", month: "long", year: "numeric" })
-        const formatted = dtf.format(d)
-        const cal = dtf.resolvedOptions?.().calendar
-        // Prefer results where the resolved calendar is an Islamic variant.
-        if (cal && /islamic/i.test(cal)) {
-          hijri = formatted
-          break
-        }
-        // Fallback sanity: sometimes resolvedOptions isn't reliable; accept
-        // formatted result if it doesn't contain the Gregorian year.
-        if (formatted && !formatted.includes(gregorianYear)) {
-          hijri = formatted
-          break
-        }
-      } catch {
-        // ignore and try next locale
-      }
+    // Jangan menerima hasil locale hanya karena tahunnya berbeda dari Masehi:
+    // sejumlah browser mobile dapat fallback ke kalender lain dan menampilkan era
+    // seperti "SM". Ambil bagian numeriknya dan validasi kalender + rentangnya.
+    const dtf = new Intl.DateTimeFormat("en-US-u-ca-islamic-umalqura-nu-latn", {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    })
+    const parts = dtf.formatToParts(d)
+    const valueOf = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value)
+    const day = valueOf("day")
+    const month = valueOf("month")
+    const year = valueOf("year")
+    const calendar = dtf.resolvedOptions().calendar
+    if (calendar === "islamic-umalqura" && day >= 1 && day <= 30 && month >= 1 && month <= 12 && year >= 1300 && year <= 1700) {
+      const HIJRI_MONTHS = [
+        "Muharram", "Safar", "Rabi'ul Awwal", "Rabi'ul Akhir", "Jumada I", "Jumada II",
+        "Rajab", "Sya'ban", "Ramadhan", "Syawal", "Dzulqa'dah", "Dzulhijjah",
+      ]
+      hijri = `${day} ${HIJRI_MONTHS[month - 1]} ${year} H`
     }
   } catch {
     hijri = ""
@@ -66,19 +56,19 @@ export function formatIslamicDate(d: Date = new Date()): { masehi: string; maseh
 
 function gregorianToHijri(d: Date) {
   // Algorithm adapted from publicly available conversion formulas.
-  const day = d.getUTCDate()
-  const month = d.getUTCMonth() + 1
-  const year = d.getUTCFullYear()
+  const day = d.getDate()
+  const month = d.getMonth() + 1
+  const year = d.getFullYear()
 
   const a = Math.floor((14 - month) / 12)
   const y = year + 4800 - a
   const m = month + 12 * a - 3
-  let jd = day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045
+  const jd = day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045
 
   let l = jd - 1948440 + 10632
   const n = Math.floor((l - 1) / 10631)
   l = l - 10631 * n + 354
-  let j = (Math.floor((10985 - l) / 5316)) * (Math.floor((50 * l) / 17719)) + (Math.floor(l / 5670)) * (Math.floor((43 * l) / 15238))
+  const j = (Math.floor((10985 - l) / 5316)) * (Math.floor((50 * l) / 17719)) + (Math.floor(l / 5670)) * (Math.floor((43 * l) / 15238))
   l = l - (Math.floor((30 - j) / 15)) * (Math.floor((17719 * j) / 50)) - (Math.floor(j / 16)) * (Math.floor((15238 * j) / 43)) + 29
   const mH = Math.floor((24 * l) / 709)
   const dH = l - Math.floor((709 * mH) / 24)

@@ -1,4 +1,4 @@
-import { test, expect, login, pickSelect, uniq } from "./helpers"
+import { test, expect, login, pickSelect } from "./helpers"
 
 const SANTRI = process.env.E2E_PENGAJAR_SANTRI || "Elma"
 
@@ -18,7 +18,6 @@ test.describe("Pengajar", () => {
   test("PG-PRES-01 Presensi manual tersimpan", async ({ page }) => {
     await login(page, "pengajar")
     await page.goto("/pengajar/presensi")
-    const row = page.locator("div", { hasText: SANTRI }).filter({ hasText: "Hadir" })
     const izinBtn = page.getByRole("button", { name: "Izin" }).first()
     if ((await izinBtn.count()) > 0) {
       await izinBtn.click()
