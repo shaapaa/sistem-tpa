@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { BookOpen, BookMarked, BookHeart, Moon, UserX } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
@@ -17,6 +19,7 @@ type CicilanRow = { id: string; hafalan_santri_id: string; tanggal: string; ayat
 type DoaRow = { id: string; tanggal: string; status: string | null; doa?: { nama: string } | null }
 type KomponenRow = { id: string; tanggal: string; status: string | null; komponen_salat_id: string }
 type PraktikRow = { id: string; tanggal: string; status: string | null; jenis_salat_id: string }
+type Santri = { id: string; nama: string }
 
 const BAC_STATUS: Record<string, string> = { LANCAR: "Lancar", KURANG_LANCAR: "Kurang Lancar", TIDAK_LANCAR: "Tidak Lancar" }
 const SALAT_STATUS: Record<string, string> = { LANCAR: "Lancar", BUTUH_BIMBINGAN: "Butuh Bimbingan" }
@@ -27,8 +30,10 @@ const progressionOrder = (nomor: number) => (nomor === 1 ? -1 : 114 - nomor);
 
 export default function PerkembanganPage() {
   const { user } = useAuth();
-  const [santriId, setSantriId] = useState<string | null>(null);
+  const [santris, setSantris] = useState<Santri[]>([]);
+  const [activeSantriId, setActiveSantriId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [bacaans, setBacaans] = useState<BacaanRow[]>([]);
   const [hafalanSurat, setHafalanSurat] = useState<HafalanSuratRow[]>([]);
   const [cicilans, setCicilans] = useState<CicilanRow[]>([]);
@@ -38,24 +43,70 @@ export default function PerkembanganPage() {
   const [jenisSalats, setJenisSalats] = useState<{ id: string; nama: string }[]>([]);
   const [praktiks, setPraktiks] = useState<PraktikRow[]>([]);
   const supabase = createClient();
+  const activeSantri = santris.find((santri) => santri.id === activeSantriId) ?? null;
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchSantris = async () => {
       if (!user) return;
-      const { data: s } = await supabase.from("santri").select("id").eq("profile_id", user.id).single();
-      if (!s) { setLoading(false); return; }
-      setSantriId(s.id);
+      setLoading(true);
+      setError(null);
+      const { data, error } = await supabase
+        .from("santri")
+        .select("id, nama")
+        .order("nama");
+      if (error) {
+        setError("Data anak tidak dapat dimuat. Silakan coba lagi.");
+        setSantris([]);
+        setActiveSantriId(null);
+      } else {
+        const nextSantris = (data ?? []) as Santri[];
+        setSantris(nextSantris);
+        setActiveSantriId((currentId) => nextSantris.some((santri) => santri.id === currentId) ? currentId : nextSantris[0]?.id ?? null);
+      }
+      setLoading(false);
+    };
+    fetchSantris();
+  }, [user]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const fetchPerkembangan = async () => {
+      if (!activeSantriId) {
+        setBacaans([]);
+        setHafalanSurat([]);
+        setCicilans([]);
+        setDoas([]);
+        setKomponens([]);
+        setKomponenRows([]);
+        setJenisSalats([]);
+        setPraktiks([]);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      setBacaans([]);
+      setHafalanSurat([]);
+      setCicilans([]);
+      setDoas([]);
+      setKomponenRows([]);
+      setPraktiks([]);
       const [ba, hs, ci, doa, komM, kom, js, pk] = await Promise.all([
-        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, status, catatan, surat(nama)").eq("santri_id", s.id).order("tanggal", { ascending: false }),
-        supabase.from("hafalan_santri").select("id, surat_id, surat(nomor, nama, jumlah_ayat)").eq("santri_id", s.id),
-        supabase.from("hafalan_surat_cicilan").select("id, hafalan_santri_id, tanggal, ayat_mulai, ayat_selesai, status"),
-        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, doa(nama)").eq("santri_id", s.id).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, status, catatan, surat(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
+        supabase.from("hafalan_santri").select("id, surat_id, surat(nomor, nama, jumlah_ayat)").eq("santri_id", activeSantriId),
+        supabase.from("hafalan_surat_cicilan").select("id, hafalan_santri_id, tanggal, ayat_mulai, ayat_selesai, status, hafalan_santri!inner(santri_id)").eq("hafalan_santri.santri_id", activeSantriId),
+        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, doa(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
         supabase.from("komponen_salat").select("id, nama").eq("aktif", true).order("nama"),
-        supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, komponen_salat_id").eq("santri_id", s.id).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, komponen_salat_id").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
         supabase.from("jenis_salat").select("id, nama").eq("aktif", true).order("nama"),
-        supabase.from("praktik_salat").select("id, tanggal, status, jenis_salat_id").eq("santri_id", s.id).order("tanggal", { ascending: false }),
+        supabase.from("praktik_salat").select("id, tanggal, status, jenis_salat_id").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
       ]);
+      if (cancelled) return;
+      const perkembanganError = [ba, hs, ci, doa, komM, kom, js, pk].find((result) => result.error)?.error;
+      if (perkembanganError) {
+        setError("Data perkembangan tidak dapat dimuat. Silakan coba lagi.");
+        setLoading(false);
+        return;
+      }
       setBacaans((ba.data ?? []) as unknown as BacaanRow[])
       setHafalanSurat((hs.data ?? []) as unknown as HafalanSuratRow[])
       setCicilans((ci.data ?? []) as unknown as CicilanRow[])
@@ -66,14 +117,21 @@ export default function PerkembanganPage() {
       setPraktiks((pk.data ?? []) as unknown as PraktikRow[])
       setLoading(false);
     };
-    fetchData();
-  }, [user]);
+    fetchPerkembangan();
+    return () => { cancelled = true; };
+  }, [activeSantriId]);
 
   if (loading) return <div className="h-32 rounded-lg bg-muted animate-pulse" />;
-  if (!santriId) return (
+  if (error) return (
+    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center sm:p-12">
+      <UserX className="mx-auto h-10 w-10 text-destructive/60 mb-3" />
+      <p className="text-sm text-destructive">{error}</p>
+    </div>
+  );
+  if (santris.length === 0 || !activeSantri) return (
     <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
       <UserX className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
-      <p className="text-sm text-muted-foreground">Data anak tidak ditemukan</p>
+      <p className="text-sm text-muted-foreground">Belum ada data anak yang terhubung dengan akun ini.</p>
     </div>
   );
 
@@ -108,7 +166,23 @@ export default function PerkembanganPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Portal orang tua" title="Perkembangan" description="Histori perkembangan bacaan, hafalan, dan praktik salat anak." backHref="/orang-tua" />
+      <PageHeader
+        eyebrow="Portal orang tua"
+        title="Perkembangan"
+        description={`Histori perkembangan bacaan, hafalan, dan praktik salat ${activeSantri.nama}.`}
+        backHref="/orang-tua"
+        action={santris.length > 1 ? (
+          <div className="w-44">
+            <Label className="text-[10px] text-muted-foreground">Pilih Anak</Label>
+            <Select value={activeSantriId} onValueChange={(value: string | null) => value && setActiveSantriId(value)} items={santris.map((santri) => ({ label: santri.nama, value: santri.id }))}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {santris.map((santri) => <SelectItem key={santri.id} value={santri.id}>{santri.nama}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : undefined}
+      />
 
       <Tabs defaultValue="bacaan" className="w-full">
         <TabsList className="grid min-h-12 h-auto w-full grid-cols-2 lg:grid-cols-4">

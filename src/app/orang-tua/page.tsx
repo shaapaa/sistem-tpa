@@ -23,6 +23,7 @@ type DoaRow = { id: string; tanggal: string; status: string | null; catatan: str
 type BacaanRow = { id: string; tanggal: string; jenis_bacaan: string | null; jilid: number | null; halaman: number | null; juz: number | null; status: string | null; catatan: string | null; surat?: { nama: string } | null }
 type PraktikRow = { id: string; tanggal: string; status: string | null; catatan: string | null; jenis_salat?: { nama: string } | null }
 type KomponenRow = { id: string; tanggal: string; status: string | null; catatan: string | null; komponen_salat?: { nama: string } | null }
+type Santri = { id: string; nama: string; kelompok?: { nama: string; sesi?: { nama: string } | null; pengajar?: { nama: string } | null } | null }
 
 const STATUS_BADGE: Record<string, "success" | "warning" | "destructive"> = {
   LANCAR: "success",
@@ -40,7 +41,8 @@ const ATT_COLORS = ["#376b59", "#b58b4b", "#b85b4b", "#768078"]
 
 export default function OrangTuaDashboard() {
   const { user, profile } = useAuth();
-  const [santri, setSantri] = useState<{ id: string; nama: string; kelompok?: { nama: string; sesi?: { nama: string } | null; pengajar?: { nama: string } | null } | null } | null>(null);
+  const [santris, setSantris] = useState<Santri[]>([]);
+  const [activeSantriId, setActiveSantriId] = useState<string | null>(null);
   const [presensis, setPresensis] = useState<PresensiRow[]>([]);
   const [cicilans, setCicilans] = useState<CicilanRow[]>([]);
   const [doas, setDoas] = useState<DoaRow[]>([]);
@@ -50,7 +52,10 @@ export default function OrangTuaDashboard() {
   const [totalDoaMaster, setTotalDoaMaster] = useState(0);
   const [jenisSalats, setJenisSalats] = useState<string[]>([]);
   const [period, setPeriod] = useState("month");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
+  const activeSantri = santris.find((santri) => santri.id === activeSantriId) ?? null;
 
   const periodStart = useMemo(() => {
     const now = new Date();
@@ -63,27 +68,67 @@ export default function OrangTuaDashboard() {
   }, [period]);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchSantris = async () => {
       if (!user) return;
-      const { data: s } = await supabase
+      setLoading(true);
+      setError(null);
+      const { data, error } = await supabase
         .from("santri")
         .select("id, nama, kelompok(nama, sesi(nama), pengajar(nama))")
-        .eq("profile_id", user.id)
-        .single();
-      if (!s) return;
-      const sd = s as unknown as { id: string; nama: string; kelompok?: { nama: string; sesi?: { nama: string } | null; pengajar?: { nama: string } | null } | null };
-      setSantri(sd);
+        .order("nama");
+      if (error) {
+        setError("Data anak tidak dapat dimuat. Silakan coba lagi.");
+        setSantris([]);
+        setActiveSantriId(null);
+      } else {
+        const nextSantris = (data ?? []) as unknown as Santri[];
+        setSantris(nextSantris);
+        setActiveSantriId((currentId) => nextSantris.some((santri) => santri.id === currentId) ? currentId : nextSantris[0]?.id ?? null);
+      }
+      setLoading(false);
+    };
+    fetchSantris();
+  }, [user]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const fetchDashboardData = async () => {
+      if (!activeSantriId) {
+        setPresensis([]);
+        setCicilans([]);
+        setDoas([]);
+        setBacaans([]);
+        setPraktiks([]);
+        setKomponens([]);
+        setTotalDoaMaster(0);
+        setJenisSalats([]);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      setPresensis([]);
+      setCicilans([]);
+      setDoas([]);
+      setBacaans([]);
+      setPraktiks([]);
+      setKomponens([]);
       const [pr, ci, doa, ba, pk, ko, doaM, js] = await Promise.all([
-        supabase.from("presensi").select("id, status, tanggal").eq("santri_id", sd.id),
-        supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri(surat(nama, jumlah_ayat))").eq("hafalan_santri.santri_id", sd.id),
-        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", sd.id),
-        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, status, catatan, surat(nama)").eq("santri_id", sd.id),
-        supabase.from("praktik_salat").select("id, tanggal, status, catatan, jenis_salat(nama)").eq("santri_id", sd.id),
-        supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat(nama)").eq("santri_id", sd.id),
+        supabase.from("presensi").select("id, status, tanggal").eq("santri_id", activeSantriId),
+        supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri(surat(nama, jumlah_ayat))").eq("hafalan_santri.santri_id", activeSantriId),
+        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", activeSantriId),
+        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, status, catatan, surat(nama)").eq("santri_id", activeSantriId),
+        supabase.from("praktik_salat").select("id, tanggal, status, catatan, jenis_salat(nama)").eq("santri_id", activeSantriId),
+        supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat(nama)").eq("santri_id", activeSantriId),
         supabase.from("doa").select("id", { count: "exact", head: true }),
         supabase.from("jenis_salat").select("nama").eq("aktif", true),
       ]);
+      if (cancelled) return;
+      const dashboardError = [pr, ci, doa, ba, pk, ko, doaM, js].find((result) => result.error)?.error;
+      if (dashboardError) {
+        setError("Data dashboard tidak dapat dimuat. Silakan coba lagi.");
+        setLoading(false);
+        return;
+      }
       setPresensis((pr.data ?? []) as unknown as PresensiRow[])
       setCicilans((ci.data ?? []) as unknown as CicilanRow[])
       setDoas((doa.data ?? []) as unknown as DoaRow[])
@@ -92,9 +137,11 @@ export default function OrangTuaDashboard() {
       setKomponens((ko.data ?? []) as unknown as KomponenRow[])
       setTotalDoaMaster(doaM.count ?? 0)
       setJenisSalats((js.data ?? []).map((x) => x.nama))
+      setLoading(false);
     };
-    fetchData();
-  }, [user]);
+    fetchDashboardData();
+    return () => { cancelled = true; };
+  }, [activeSantriId]);
 
   const inPeriod = (t: string) => t >= periodStart;
 
@@ -193,53 +240,80 @@ export default function OrangTuaDashboard() {
     )
   ).sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1)).slice(0, 6);
 
+  if (loading) return <div className="h-32 rounded-lg bg-muted animate-pulse" />;
+  if (error) return (
+    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center sm:p-12">
+      <UserX className="mx-auto mb-3 h-10 w-10 text-destructive/60" />
+      <p className="text-sm text-destructive">{error}</p>
+    </div>
+  );
+  if (santris.length === 0 || !activeSantri) return (
+    <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
+      <UserX className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
+      <p className="text-sm text-muted-foreground">Data anak belum tersedia.</p>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Portal orang tua"
-        title={`Selamat Datang, ${profile?.nama ?? "Orang Tua"}`}
-        description={santri ? `Berikut ringkasan perkembangan ${santri.nama}.` : "Ringkasan perkembangan anak Anda."}
+        eyebrow={`Halo, ${profile?.nama ?? "Orang Tua"}`}
+        title={`Perkembangan ${activeSantri.nama}`}
+        description={`Ringkasan perkembangan ${activeSantri.nama} yang Anda pantau.`}
         action={
-          <div className="w-44">
-            <Label className="text-[10px] text-muted-foreground">Periode</Label>
-            <Select value={period} onValueChange={(v: string | null) => v && setPeriod(v)} items={[{ label: "Minggu Ini", value: "week" }, { label: "Bulan Ini", value: "month" }, { label: "3 Bulan", value: "quarter" }, { label: "Tahun Ini", value: "year" }]}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">Minggu Ini</SelectItem>
-                <SelectItem value="month">Bulan Ini</SelectItem>
-                <SelectItem value="quarter">3 Bulan</SelectItem>
-                <SelectItem value="year">Tahun Ini</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap gap-3">
+            {santris.length > 1 && (
+              <div className="w-44">
+                <Label className="text-[10px] text-muted-foreground">Pilih Anak</Label>
+                <Select value={activeSantriId} onValueChange={(value: string | null) => value && setActiveSantriId(value)} items={santris.map((santri) => ({ label: santri.nama, value: santri.id }))}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {santris.map((santri) => <SelectItem key={santri.id} value={santri.id}>{santri.nama}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="w-44">
+              <Label className="text-[10px] text-muted-foreground">Periode</Label>
+              <Select value={period} onValueChange={(v: string | null) => v && setPeriod(v)} items={[{ label: "Minggu Ini", value: "week" }, { label: "Bulan Ini", value: "month" }, { label: "3 Bulan", value: "quarter" }, { label: "Tahun Ini", value: "year" }]}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">Minggu Ini</SelectItem>
+                  <SelectItem value="month">Bulan Ini</SelectItem>
+                  <SelectItem value="quarter">3 Bulan</SelectItem>
+                  <SelectItem value="year">Tahun Ini</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         }
       />
 
       <IslamicBanner text="Anak adalah amanah, didiklah mereka dengan pendidikan yang baik." source="Pesan bijak bagi orang tua" />
 
-      {santri && (
+      {activeSantri && (
         <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-700 via-primary to-teal-600 p-5 text-white">
           <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full border border-white/15" />
           <div className="absolute -bottom-12 -left-8 h-32 w-32 rounded-full border border-white/10" />
           <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-white/15 p-3 text-lg font-bold text-white">{santri.nama.charAt(0)}</div>
+              <div className="rounded-lg bg-white/15 p-3 text-lg font-bold text-white">{activeSantri.nama.charAt(0)}</div>
               <div>
                 <p className="text-xs text-white/70">Nama</p>
-                <p className="font-semibold text-white">{santri.nama}</p>
+                <p className="font-semibold text-white">{activeSantri.nama}</p>
               </div>
             </div>
             <div>
               <p className="text-xs text-white/70">Kelompok</p>
-              <p className="font-medium text-white">{santri.kelompok?.nama ?? "-"}</p>
+              <p className="font-medium text-white">{activeSantri.kelompok?.nama ?? "-"}</p>
             </div>
             <div>
               <p className="text-xs text-white/70">Sesi</p>
-              <p className="font-medium text-white">{santri.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : santri.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-"}</p>
+              <p className="font-medium text-white">{activeSantri.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : activeSantri.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-"}</p>
             </div>
             <div>
               <p className="text-xs text-white/70">Pengajar</p>
-              <p className="font-medium text-white">{santri.kelompok?.pengajar?.nama ?? "-"}</p>
+              <p className="font-medium text-white">{activeSantri.kelompok?.pengajar?.nama ?? "-"}</p>
             </div>
           </div>
         </div>

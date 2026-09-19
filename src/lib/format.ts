@@ -2,8 +2,7 @@ export function formatRole(role: string): string {
   const map: Record<string, string> = {
     ADMIN: "Admin",
     PENGAJAR: "Pengajar",
-    SANTRI: "Santri",
-    ORANG_TUA: "Orang Tua",
+    SANTRI: "Orang Tua",
   };
   return map[role] ?? role;
 }

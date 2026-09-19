@@ -28,13 +28,24 @@ export function SearchableSelect({ value, onChange, placeholder = "Pilih", optio
   const filtered = useMemo(() => options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase())), [options, query])
   const selected = options.find((o) => o.value === value)
 
-  const toggle = () => {
-    if (disabled) return
-    if (open) { setOpen(false); return }
+  const updatePosition = () => {
     const el = btnRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    setPos({ top: r.bottom + 6, left: r.left, width: r.width })
+    const viewport = window.visualViewport
+    const viewportTop = viewport?.offsetTop ?? 0
+    const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight)
+    const menuHeight = 276
+    const top = r.bottom + 6 + menuHeight <= viewportBottom
+      ? r.bottom + 6
+      : Math.max(viewportTop + 8, r.top - menuHeight - 6)
+    setPos({ top, left: r.left, width: r.width })
+  }
+
+  const toggle = () => {
+    if (disabled) return
+    if (open) { setOpen(false); return }
+    updatePosition()
     setOpen(true)
   }
 
@@ -45,20 +56,21 @@ export function SearchableSelect({ value, onChange, placeholder = "Pilih", optio
       setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false) }
-    const initialWidth = window.innerWidth
     const onResize = () => {
-      // Only close the menu on width changes (likely orientation change),
-      // not on height-only resizes such as mobile virtual keyboard opening.
-      if (window.innerWidth !== initialWidth) setOpen(false)
+      updatePosition()
     }
 
     document.addEventListener("mousedown", close)
     document.addEventListener("keydown", onKey)
     window.addEventListener("resize", onResize)
+    window.visualViewport?.addEventListener("resize", onResize)
+    window.visualViewport?.addEventListener("scroll", onResize)
     return () => {
       document.removeEventListener("mousedown", close)
       document.removeEventListener("keydown", onKey)
       window.removeEventListener("resize", onResize)
+      window.visualViewport?.removeEventListener("resize", onResize)
+      window.visualViewport?.removeEventListener("scroll", onResize)
     }
   }, [open])
 

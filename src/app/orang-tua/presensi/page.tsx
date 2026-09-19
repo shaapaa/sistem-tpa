@@ -13,47 +13,79 @@ import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/layout/empty-state";
 
 type PresensiRow = { id: string; tanggal: string; status: string; keterangan: string | null }
+type Santri = { id: string; nama: string }
 
 export default function PresensiPage() {
   const { user } = useAuth();
-  const [santriId, setSantriId] = useState<string | null>(null);
+  const [santris, setSantris] = useState<Santri[]>([]);
+  const [activeSantriId, setActiveSantriId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [records, setRecords] = useState<PresensiRow[]>([]);
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const supabase = createClient();
+  const activeSantri = santris.find((santri) => santri.id === activeSantriId) ?? null;
 
   // Sistem digunakan sejak 2026: tahun 2026 s.d. 5 tahun ke depan
   const years = useMemo(() => Array.from({ length: 5 }, (_, i) => 2026 + i), []);
 
   useEffect(() => {
-    const fetchId = async () => {
+    const fetchSantris = async () => {
       if (!user) return;
-      const { data: s } = await supabase.from("santri").select("id").eq("profile_id", user.id).single();
-      setSantriId(s?.id ?? null);
+      setLoading(true);
+      setError(null);
+      const { data, error } = await supabase
+        .from("santri")
+        .select("id, nama")
+        .order("nama");
+      if (error) {
+        setError("Data anak tidak dapat dimuat. Silakan coba lagi.");
+        setSantris([]);
+        setActiveSantriId(null);
+      } else {
+        const nextSantris = (data ?? []) as Santri[];
+        setSantris(nextSantris);
+        setActiveSantriId((currentId) => nextSantris.some((santri) => santri.id === currentId) ? currentId : nextSantris[0]?.id ?? null);
+      }
       setLoading(false);
     };
-    fetchId();
+    fetchSantris();
   }, [user]);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchPresensi = async () => {
-      if (!santriId) return;
+      if (!activeSantriId) {
+        setRecords([]);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      setRecords([]);
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const lastDay = new Date(year, month, 0).getDate();
       const end = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("presensi")
         .select("id, tanggal, status, keterangan")
-        .eq("santri_id", santriId)
+        .eq("santri_id", activeSantriId)
         .gte("tanggal", start)
         .lte("tanggal", end)
         .order("tanggal", { ascending: false });
+      if (cancelled) return;
+      if (error) {
+        setError("Data presensi tidak dapat dimuat. Silakan coba lagi.");
+        setLoading(false);
+        return;
+      }
       setRecords((data ?? []) as unknown as PresensiRow[]);
+      setLoading(false);
     };
     fetchPresensi();
-  }, [santriId, month, year]);
+    return () => { cancelled = true; };
+  }, [activeSantriId, month, year]);
 
   const hadir = records.filter((r) => r.status === "HADIR").length;
   const izin = records.filter((r) => r.status === "IZIN").length;
@@ -62,14 +94,35 @@ export default function PresensiPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Portal orang tua" title="Presensi" description="Riwayat kehadiran anak." backHref="/orang-tua" />
+      <PageHeader
+        eyebrow="Portal orang tua"
+        title="Presensi"
+        description={activeSantri ? `Riwayat kehadiran ${activeSantri.nama}.` : "Riwayat kehadiran anak."}
+        backHref="/orang-tua"
+        action={santris.length > 1 ? (
+          <div className="w-44">
+            <Label className="text-[10px] text-muted-foreground">Pilih Anak</Label>
+            <Select value={activeSantriId} onValueChange={(value: string | null) => value && setActiveSantriId(value)} items={santris.map((santri) => ({ label: santri.nama, value: santri.id }))}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {santris.map((santri) => <SelectItem key={santri.id} value={santri.id}>{santri.nama}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : undefined}
+      />
 
       {loading ? (
         <div className="h-32 rounded-lg bg-muted animate-pulse" />
-      ) : !santriId ? (
+      ) : error ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center sm:p-12">
+          <UserX className="mx-auto h-10 w-10 text-destructive/60 mb-3" />
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      ) : santris.length === 0 || !activeSantri ? (
         <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
           <UserX className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
-          <p className="text-sm text-muted-foreground">Data anak tidak ditemukan</p>
+          <p className="text-sm text-muted-foreground">Belum ada data anak yang terhubung dengan akun ini.</p>
         </div>
       ) : (
         <>

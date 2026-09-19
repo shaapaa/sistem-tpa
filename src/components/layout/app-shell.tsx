@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { MobileSidebar } from "@/components/layout/mobile-sidebar"
 import { AppNavContext } from "@/components/layout/app-nav-context"
 
-const publicPaths = ["/login"]
+const publicPaths = ["/login", "/register"]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

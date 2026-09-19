@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -69,18 +70,37 @@ export default function LoginPage() {
     if (user) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, is_active")
         .eq("id", user.id)
         .single()
 
+      if (!profile || profile.is_active === false) {
+        await supabase.auth.signOut()
+        setError("Akun ini sudah dinonaktifkan. Hubungi admin TPA.")
+        setLoading(false)
+        return
+      }
+
       if (profile?.role === "ADMIN") {
-        router.push("/admin")
+        router.replace("/admin")
       } else if (profile?.role === "PENGAJAR") {
-        router.push("/pengajar")
+        router.replace("/pengajar")
       } else {
-        router.push("/orang-tua")
+        const { count, error: waliError } = await supabase
+          .from("wali_santri")
+          .select("id", { count: "exact", head: true })
+          .eq("profile_id", user.id)
+
+        if (waliError) {
+          setError("Status data anak belum dapat diperiksa. Silakan coba lagi.")
+          setLoading(false)
+          return
+        }
+
+        router.replace((count ?? 0) > 0 ? "/orang-tua" : "/orang-tua/anak")
       }
     }
+    setLoading(false)
   }
 
   return (
@@ -118,7 +138,6 @@ export default function LoginPage() {
 
       <section className="flex min-h-screen items-center justify-center bg-gradient-to-b from-emerald-50/70 via-background to-background px-5 py-10 sm:px-10">
         <div className="w-full max-w-md">
-          {/* Logo paling atas (mobile) */}
           <div className="mb-7 flex flex-col items-center gap-1.5 lg:hidden">
             <img src="/image/logo-tpa-transparent.png" alt="Logo TPA Baitul Yatama" className="h-12 w-auto object-contain" />
             <p className="mt-1.5 font-semibold text-foreground">Baitul Yatama</p>
@@ -150,8 +169,18 @@ export default function LoginPage() {
               <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" placeholder="email@contoh.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="off" /></div>
               <div className="space-y-2"><Label htmlFor="password">Password</Label><div className="relative"><Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="pr-10" autoComplete="new-password" /><button type="button" aria-label={showPassword ? "Sembunyikan password" : "Lihat password"} onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
               {error && <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm leading-5 text-destructive animate-slide-up" role="alert">{error}</p>}
-              <Button type="submit" className="group h-11 w-full justify-between px-4" disabled={loading}>{loading ? "Masuk..." : <><span>Masuk</span><ArrowRight className="transition-transform group-hover:translate-x-1" /></>}</Button>
+              <Button type="submit" className="group relative h-11 w-full justify-center px-12" disabled={loading}>
+                {loading ? "Masuk..." : <><span>Masuk</span><ArrowRight className="absolute right-4 h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
+              </Button>
             </form>
+            <div className="mt-5 rounded-xl border border-primary/15 bg-primary/[0.035] p-3.5 text-center">
+              <p className="text-sm font-medium text-foreground">Belum punya akun?</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Pilih jenis akun untuk mulai menggunakan sistem.</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Link href="/register" className="flex min-h-10 items-center justify-center rounded-lg bg-card px-2 py-2 text-center text-xs font-medium leading-tight text-primary shadow-sm ring-1 ring-border/70 transition-all hover:bg-primary/10 hover:text-primary hover:ring-primary/30 active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">Daftar sebagai Orang Tua</Link>
+                <Link href="/register/pengajar" className="flex min-h-10 items-center justify-center rounded-lg bg-card px-2 py-2 text-center text-xs font-medium leading-tight text-primary shadow-sm ring-1 ring-border/70 transition-all hover:bg-primary/10 hover:text-primary hover:ring-primary/30 active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">Daftar sebagai Pengajar</Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>

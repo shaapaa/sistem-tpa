@@ -9,6 +9,7 @@ import { LogOut, LayoutDashboard, Quote } from "lucide-react"
 import { iconMap, navItemsForRole, isNavItemActive, type NavItem } from "@/lib/nav"
 import { useEffect, useMemo, useState } from "react"
 import { formatIslamicDate, HADITH_QUOTES } from "@/lib/islamic-date"
+import { formatRole } from "@/lib/format"
 
 const ARABESQUE = "data:image/svg+xml;utf8," + encodeURIComponent(
   `<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='%23ffffff' stroke-opacity='0.12'><circle cx='40' cy='40' r='18'/><circle cx='40' cy='40' r='28'/><path d='M40 12v8M40 60v8M12 40h8M60 40h8M24 24l6 6M50 50l6 6M56 24l-6 6M30 50l-6 6'/></g></svg>`
@@ -45,6 +46,8 @@ function NavLinks({ items }: { items: NavItem[] }) {
 
 function Logo() {
   const [date] = useState(() => formatIslamicDate())
+  const { profile } = useAuth()
+  const monitoringLabel = profile?.role === "SANTRI" ? "Sistem Monitoring Orang Tua" : "Sistem Monitoring Santri"
   return (
     <div className="relative overflow-hidden border-b border-amber-400/30 bg-gradient-to-br from-primary via-teal-700 to-emerald-900 px-5 py-6">
       <div className="absolute inset-0" style={{ backgroundImage: `url("${ARABESQUE}")`, backgroundSize: "90px 90px" }} />
@@ -53,7 +56,7 @@ function Logo() {
         <img src="/image/logo-tpa-transparent.png" alt="Logo TPA Baitul Yatama" className="h-10 w-auto object-contain" />
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold text-white truncate">Baitul Yatama</span>
-          <span className="text-xs text-white/75 truncate">Sistem Monitoring Santri</span>
+          <span className="text-xs text-white/75 truncate">{monitoringLabel}</span>
         </div>
       </div>
       <p className="relative mt-3 border-t border-white/15 pt-2.5 text-[10px] leading-4 text-white/70">{date.masehiShort} · {date.hijri}</p>
@@ -66,6 +69,7 @@ export function SidebarContent() {
   const router = useRouter()
   const supabase = createClient()
   const navItems = useMemo(() => navItemsForRole(profile?.role), [profile?.role])
+  const roleLabel = profile?.role === "SANTRI" ? "Orang Tua" : profile?.role ? formatRole(profile.role) : ""
   const [quoteIdx, setQuoteIdx] = useState(0)
 
   useEffect(() => {
@@ -102,7 +106,7 @@ export function SidebarContent() {
         </div>
         <div className="px-3">
           <div className="text-sm font-medium text-sidebar-foreground truncate">{profile?.nama}</div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-[oklch(0.72_0.025_92)]">{profile?.role?.toLowerCase()}</div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[oklch(0.72_0.025_92)]">{roleLabel}</div>
         </div>
         <button
           onClick={handleLogout}

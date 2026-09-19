@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, FileText, CalendarDays, BookMarked, Moon, CalendarCheck, Activity, CalendarX, UserX, TrendingUp } from "lucide-react";
 import { formatDate, formatDateShort, formatStatus, getStatusBadgeVariant } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
@@ -38,7 +39,10 @@ function firstOfMonth(d: Date) { return `${d.getFullYear()}-${String(d.getMonth(
 
 export default function OrangTuaLaporanPage() {
   const { user } = useAuth();
-  const [santri, setSantri] = useState<SantriInfo | null>(null);
+  const [santris, setSantris] = useState<SantriInfo[]>([]);
+  const [activeSantriId, setActiveSantriId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState(() => firstOfMonth(new Date()));
   const [dateTo, setDateTo] = useState(() => isoDate(new Date()));
   const [presensis, setPresensis] = useState<PresensiRow[]>([]);
@@ -57,38 +61,86 @@ export default function OrangTuaLaporanPage() {
   const [jenisSalats, setJenisSalats] = useState<{ id: string; nama: string }[]>([]);
   const [totalDoa, setTotalDoa] = useState(0);
   const supabase = createClient();
+  const activeSantri = santris.find((santri) => santri.id === activeSantriId) ?? null;
 
   useEffect(() => {
-    const load = async () => {
+    const loadSantris = async () => {
       if (!user) return;
-      const { data: s } = await supabase.from("santri").select("id, nama, kelompok(nama, sesi(nama), pengajar(nama))").eq("profile_id", user.id).single();
-      if (!s) return;
-      setSantri(s as unknown as SantriInfo);
+      setLoading(true);
+      setError(null);
+      const { data, error } = await supabase
+        .from("santri")
+        .select("id, nama, kelompok(nama, sesi(nama), pengajar(nama))")
+        .order("nama");
+      if (error) {
+        setError("Data anak tidak dapat dimuat. Silakan coba lagi.");
+        setSantris([]);
+        setActiveSantriId(null);
+      } else {
+        const nextSantris = (data ?? []) as unknown as SantriInfo[];
+        setSantris(nextSantris);
+        setActiveSantriId((currentId) => nextSantris.some((santri) => santri.id === currentId) ? currentId : nextSantris[0]?.id ?? null);
+      }
+      setLoading(false);
     };
-    load();
+    loadSantris();
   }, [user]);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
-      if (!santri) return;
+      if (!activeSantriId) {
+        setPresensis([]);
+        setBacaans([]);
+        setCicilans([]);
+        setDoas([]);
+        setKomponenRows([]);
+        setPraktiks([]);
+        setCumulativeBacaans([]);
+        setCumulativeCicilans([]);
+        setCumulativeDoas([]);
+        setCumulativeKomponenRows([]);
+        setCumulativePraktiks([]);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      setPresensis([]);
+      setBacaans([]);
+      setCicilans([]);
+      setDoas([]);
+      setKomponenRows([]);
+      setPraktiks([]);
+      setCumulativeBacaans([]);
+      setCumulativeCicilans([]);
+      setCumulativeDoas([]);
+      setCumulativeKomponenRows([]);
+      setCumulativePraktiks([]);
       const start = `${dateFrom}T00:00:00`;
       const end = `${dateTo}T23:59:59`;
       const [pr, ba, ci, doa, ko, pk, komM, js, doaCount, cumBa, cumCi, cumDoa, cumKo, cumPk] = await Promise.all([
-        supabase.from("presensi").select("id, tanggal, status, keterangan").eq("santri_id", santri.id).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
-        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, ayat_mulai, ayat_selesai, status, catatan, surat(nama)").eq("santri_id", santri.id).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
-        supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri(santri_id, surat_id, surat(nama, jumlah_ayat, nomor))").eq("hafalan_santri.santri_id", santri.id).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
-        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", santri.id).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
-        supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat_id, komponen_salat(nama)").eq("santri_id", santri.id).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
-        supabase.from("praktik_salat").select("id, tanggal, status, catatan, jenis_salat_id, jenis_salat(nama)").eq("santri_id", santri.id).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("presensi").select("id, tanggal, status, keterangan").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, ayat_mulai, ayat_selesai, status, catatan, surat(nama)").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri!inner(santri_id, surat_id, surat(nama, jumlah_ayat, nomor))").eq("hafalan_santri.santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat_id, komponen_salat(nama)").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("praktik_salat").select("id, tanggal, status, catatan, jenis_salat_id, jenis_salat(nama)").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
         supabase.from("komponen_salat").select("id, nama").eq("aktif", true).order("nama"),
         supabase.from("jenis_salat").select("id, nama").eq("aktif", true).order("nama"),
         supabase.from("doa").select("id", { count: "exact", head: true }).eq("aktif", true),
-        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, ayat_mulai, ayat_selesai, status, catatan, surat(nama)").eq("santri_id", santri.id).lte("tanggal", end).order("tanggal", { ascending: false }),
-        supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri(santri_id, surat_id, surat(nama, jumlah_ayat, nomor))").eq("hafalan_santri.santri_id", santri.id).lte("tanggal", end).order("tanggal", { ascending: false }),
-        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", santri.id).lte("tanggal", end).order("tanggal", { ascending: false }),
-        supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat_id, komponen_salat(nama)").eq("santri_id", santri.id).lte("tanggal", end).order("tanggal", { ascending: false }),
-        supabase.from("praktik_salat").select("id, tanggal, status, catatan, jenis_salat_id, jenis_salat(nama)").eq("santri_id", santri.id).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, ayat_mulai, ayat_selesai, status, catatan, surat(nama)").eq("santri_id", activeSantriId).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri!inner(santri_id, surat_id, surat(nama, jumlah_ayat, nomor))").eq("hafalan_santri.santri_id", activeSantriId).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", activeSantriId).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat_id, komponen_salat(nama)").eq("santri_id", activeSantriId).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("praktik_salat").select("id, tanggal, status, catatan, jenis_salat_id, jenis_salat(nama)").eq("santri_id", activeSantriId).lte("tanggal", end).order("tanggal", { ascending: false }),
       ]);
+      if (cancelled) return;
+      const laporanError = [pr, ba, ci, doa, ko, pk, komM, js, doaCount, cumBa, cumCi, cumDoa, cumKo, cumPk].find((result) => result.error)?.error;
+      if (laporanError) {
+        setError("Data laporan tidak dapat dimuat. Silakan coba lagi.");
+        setLoading(false);
+        return;
+      }
       setPresensis((pr.data ?? []) as unknown as PresensiRow[]);
       setBacaans((ba.data ?? []) as unknown as BacaanRow[]);
       setCicilans((ci.data ?? []) as unknown as CicilanRow[]);
@@ -103,15 +155,26 @@ export default function OrangTuaLaporanPage() {
       setKomponens((komM.data ?? []) as { id: string; nama: string }[]);
       setJenisSalats((js.data ?? []) as { id: string; nama: string }[]);
       setTotalDoa(doaCount.count ?? 0);
+      setLoading(false);
     };
     fetchData();
-  }, [santri, dateFrom, dateTo]);
+    return () => { cancelled = true; };
+  }, [activeSantriId, dateFrom, dateTo]);
 
-  if (!santri) {
+  if (loading) return <div className="h-32 rounded-lg bg-muted animate-pulse" />;
+  if (error) {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center sm:p-12">
+        <UserX className="mx-auto mb-3 h-10 w-10 text-destructive/60" />
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    );
+  }
+  if (santris.length === 0 || !activeSantri) {
     return (
       <div className="space-y-6">
         <PageHeader eyebrow="Laporan santri" title="Laporan Perkembangan Santri" description="Rekap perkembangan anak Anda." backHref="/orang-tua" />
-        <EmptyState message="Data anak tidak ditemukan" />
+        <EmptyState message="Belum ada data anak yang terhubung dengan akun ini." />
       </div>
     );
   }
@@ -190,11 +253,11 @@ export default function OrangTuaLaporanPage() {
 
   const handleExportPDF = async () => {
     await createReportPdf({
-      filename: `laporan-perkembangan-${santri.nama.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.pdf`,
+      filename: `laporan-perkembangan-${activeSantri.nama.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.pdf`,
       title: "Laporan Perkembangan Santri",
       metadata: [
-        `Nama: ${santri.nama}`,
-        `Kelompok: ${santri.kelompok?.nama ?? "-"} · Sesi: ${santri.kelompok?.sesi?.nama ?? "-"} · Pengajar: ${santri.kelompok?.pengajar?.nama ?? "-"}`,
+        `Nama: ${activeSantri.nama}`,
+        `Kelompok: ${activeSantri.kelompok?.nama ?? "-"} · Sesi: ${activeSantri.kelompok?.sesi?.nama ?? "-"} · Pengajar: ${activeSantri.kelompok?.pengajar?.nama ?? "-"}`,
         `Periode: ${periode}`,
         `Capaian kumulatif hingga: ${formatDate(dateTo)}`,
         `Dicetak: ${new Date().toLocaleDateString("id-ID")}`,
@@ -220,10 +283,21 @@ export default function OrangTuaLaporanPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Laporan santri" title="Laporan Perkembangan Santri" description="Perkembangan anak Anda pada periode terpilih." backHref="/orang-tua" action={<Button onClick={handleExportPDF} className="h-9 px-4" disabled={noData}><Download className="mr-2 h-4 w-4" /> Cetak PDF</Button>} />
+      <PageHeader eyebrow="Laporan santri" title="Laporan Perkembangan Santri" description={`Perkembangan ${activeSantri.nama} pada periode terpilih.`} backHref="/orang-tua" action={<Button onClick={handleExportPDF} className="h-9 px-4" disabled={noData}><Download className="mr-2 h-4 w-4" /> Cetak PDF</Button>} />
 
       <div className="surface-panel p-4 sm:p-5">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {santris.length > 1 && (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Pilih Anak</Label>
+              <Select value={activeSantriId} onValueChange={(value: string | null) => value && setActiveSantriId(value)} items={santris.map((santri) => ({ label: santri.nama, value: santri.id }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {santris.map((santri) => <SelectItem key={santri.id} value={santri.id}>{santri.nama}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-1">
             <Label className="text-[10px] text-muted-foreground">Tanggal mulai</Label>
             <DatePicker value={dateFrom} onChange={setDateFrom} />
@@ -243,23 +317,23 @@ export default function OrangTuaLaporanPage() {
             <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full border border-white/15" />
             <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-white/15 p-3 text-lg font-bold text-white">{santri.nama.charAt(0)}</div>
+                <div className="rounded-lg bg-white/15 p-3 text-lg font-bold text-white">{activeSantri.nama.charAt(0)}</div>
                 <div>
                   <p className="text-xs text-white/70">Nama Santri</p>
-                  <p className="font-semibold text-white">{santri.nama}</p>
+                  <p className="font-semibold text-white">{activeSantri.nama}</p>
                 </div>
               </div>
               <div>
                 <p className="text-xs text-white/70">Kelompok</p>
-                <p className="font-medium text-white">{santri.kelompok?.nama ?? "-"}</p>
+                <p className="font-medium text-white">{activeSantri.kelompok?.nama ?? "-"}</p>
               </div>
               <div>
                 <p className="text-xs text-white/70">Sesi</p>
-                <p className="font-medium text-white">{santri.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : santri.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-"}</p>
+                <p className="font-medium text-white">{activeSantri.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : activeSantri.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-"}</p>
               </div>
               <div>
                 <p className="text-xs text-white/70">Pengajar</p>
-                <p className="font-medium text-white">{santri.kelompok?.pengajar?.nama ?? "-"}</p>
+                <p className="font-medium text-white">{activeSantri.kelompok?.pengajar?.nama ?? "-"}</p>
               </div>
               <div>
                 <p className="text-xs text-white/70">Periode</p>
@@ -498,7 +572,7 @@ export default function OrangTuaLaporanPage() {
           </section>
 
           <footer className="rounded-xl border border-border/70 bg-card/70 p-4 text-sm text-muted-foreground">
-            <span>Data perkembangan dicatat oleh pengajar: <strong className="text-foreground">{santri.kelompok?.pengajar?.nama ?? "-"}</strong></span>
+            <span>Data perkembangan dicatat oleh pengajar: <strong className="text-foreground">{activeSantri.kelompok?.pengajar?.nama ?? "-"}</strong></span>
           </footer>
         </>
       )}

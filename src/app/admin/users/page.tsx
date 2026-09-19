@@ -15,6 +15,7 @@ import { Plus, Pencil, Trash2, Search, Eye, EyeOff } from "lucide-react"
 import { formatRole } from "@/lib/format"
 import { PageHeader } from "@/components/layout/page-header"
 import { FilterBar } from "@/components/layout/filter-bar"
+import { useAuth } from "@/lib/auth-provider"
 
 interface Profile {
   id: string
@@ -22,8 +23,8 @@ interface Profile {
   role: string
   is_active: boolean | null
   created_at: string
-  santri?: { nama: string } | null
-  pengajar?: { nama: string } | null
+  wali_santri?: { santri_id: string; santri?: { id: string; nama: string } | null }[]
+  pengajar?: { id: string; nama: string } | null
 }
 
 function normalizeUsername(nama: string): string {
@@ -31,8 +32,9 @@ function normalizeUsername(nama: string): string {
 }
 
 export default function UsersPage() {
+  const { user } = useAuth()
   const [profiles, setProfiles] = useState<Profile[]>([])
-  const [santris, setSantris] = useState<{ id: string; nama: string; profile_id: string | null }[]>([])
+  const [santris, setSantris] = useState<{ id: string; nama: string }[]>([])
   const [pengajars, setPengajars] = useState<{ id: string; nama: string; profile_id: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -45,8 +47,9 @@ export default function UsersPage() {
     nama: "",
     role: "",
     password: "",
-    santri_id: "",
+    santri_ids: [] as string[],
     pengajar_id: "",
+    is_active: true,
   })
   const supabase = createClient()
 
@@ -65,21 +68,24 @@ export default function UsersPage() {
 
   const fetchData = async () => {
     const [profRes, santriRes, pengajarRes] = await Promise.all([
-      supabase.from("profiles").select("*, santri(nama), pengajar(nama)").order("created_at", { ascending: false }),
-      supabase.from("santri").select("id, nama, profile_id").order("nama"),
+      supabase.from("profiles").select("*, wali_santri(santri_id, santri(id, nama)), pengajar(id, nama)").order("created_at", { ascending: false }),
+      supabase.from("santri").select("id, nama").order("nama"),
       supabase.from("pengajar").select("id, nama, profile_id").order("nama"),
     ])
-    setProfiles(profRes.data ?? [])
+    setProfiles((profRes.data ?? []) as Profile[])
     setSantris(santriRes.data ?? [])
     setPengajars(pengajarRes.data ?? [])
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    const loadData = async () => { await fetchData() }
+    void loadData()
+  }, [])
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ nama: "", role: "PENGAJAR", password: "", santri_id: "", pengajar_id: "" })
+    setForm({ nama: "", role: "PENGAJAR", password: "", santri_ids: [], pengajar_id: "", is_active: true })
     setDialogOpen(true)
   }
 
@@ -89,8 +95,9 @@ export default function UsersPage() {
       nama: p.nama,
       role: p.role,
       password: "",
-      santri_id: p.santri?.nama ? "" : "",
-      pengajar_id: p.pengajar?.nama ? "" : "",
+      santri_ids: p.wali_santri?.map((relasi) => relasi.santri_id) ?? [],
+      pengajar_id: p.pengajar?.id ?? "",
+      is_active: p.is_active !== false,
     })
     setDialogOpen(true)
   }
@@ -105,17 +112,26 @@ export default function UsersPage() {
       return
     }
 
-    if (!editing && form.role === "SANTRI" && !form.santri_id) {
+    if (form.role === "SANTRI" && form.santri_ids.length === 0) {
       setErrorMsg("Pilih santri untuk akun santri")
       return
     }
-    if (!editing && form.role === "PENGAJAR" && !form.pengajar_id) {
+    if (form.role === "PENGAJAR" && !form.pengajar_id) {
       setErrorMsg("Pilih pengajar untuk akun pengajar")
       return
     }
 
     if (editing) {
-      const { error: profErr } = await supabase.from("profiles").update({ nama: form.nama, role: form.role }).eq("id", editing.id)
+      if (editing.id === user?.id && (form.role !== "ADMIN" || !form.is_active)) {
+        setErrorMsg("Admin yang sedang digunakan tidak dapat diubah role atau dinonaktifkan")
+        return
+      }
+      const activeAdminCount = profiles.filter((p) => p.role === "ADMIN" && p.is_active !== false).length
+      if (editing.role === "ADMIN" && editing.is_active !== false && (form.role !== "ADMIN" || !form.is_active) && activeAdminCount <= 1) {
+        setErrorMsg("Minimal harus ada satu akun admin aktif")
+        return
+      }
+      const { error: profErr } = await supabase.from("profiles").update({ nama: form.nama, role: form.role, is_active: form.is_active }).eq("id", editing.id)
       if (profErr) { setErrorMsg(profErr.message); return }
       if (form.password) {
         try {
@@ -125,19 +141,32 @@ export default function UsersPage() {
           return
         }
       }
-      // Kelola relasi santri -> profile (role SANTRI)
+      // Kelola relasi wali -> santri (role SANTRI)
       if (form.role !== "SANTRI") {
-        await supabase.from("santri").update({ profile_id: null }).eq("profile_id", editing.id)
-      } else if (form.santri_id) {
-        await supabase.from("santri").update({ profile_id: null }).eq("profile_id", editing.id)
-        await supabase.from("santri").update({ profile_id: editing.id }).eq("id", form.santri_id)
+        const { error } = await supabase.from("wali_santri").delete().eq("profile_id", editing.id)
+        if (error) { setErrorMsg(error.message); return }
+      } else {
+        const currentSantriIds = editing.wali_santri?.map((relasi) => relasi.santri_id) ?? []
+        const toAdd = form.santri_ids.filter((id) => !currentSantriIds.includes(id))
+        const toRemove = currentSantriIds.filter((id) => !form.santri_ids.includes(id))
+        if (toAdd.length > 0) {
+          const { error } = await supabase.from("wali_santri").insert(toAdd.map((santri_id) => ({ profile_id: editing.id, santri_id })))
+          if (error) { setErrorMsg(error.message); return }
+        }
+        if (toRemove.length > 0) {
+          const { error } = await supabase.from("wali_santri").delete().eq("profile_id", editing.id).in("santri_id", toRemove)
+          if (error) { setErrorMsg(error.message); return }
+        }
       }
       // Kelola relasi pengajar -> profile (role PENGAJAR)
       if (form.role !== "PENGAJAR") {
-        await supabase.from("pengajar").update({ profile_id: null }).eq("profile_id", editing.id)
-      } else if (form.pengajar_id) {
-        await supabase.from("pengajar").update({ profile_id: null }).eq("profile_id", editing.id)
-        await supabase.from("pengajar").update({ profile_id: editing.id }).eq("id", form.pengajar_id)
+        const { error } = await supabase.from("pengajar").update({ profile_id: null }).eq("profile_id", editing.id)
+        if (error) { setErrorMsg(error.message); return }
+      } else {
+        const { error: unlinkErr } = await supabase.from("pengajar").update({ profile_id: null }).eq("profile_id", editing.id)
+        if (unlinkErr) { setErrorMsg(unlinkErr.message); return }
+        const { error: linkErr } = await supabase.from("pengajar").update({ profile_id: editing.id }).eq("id", form.pengajar_id)
+        if (linkErr) { setErrorMsg(linkErr.message); return }
       }
     } else {
       let authId: string
@@ -151,7 +180,7 @@ export default function UsersPage() {
         setErrorMsg((err as Error).message)
         return
       }
-      const { error: profInsertErr } = await supabase.from("profiles").insert({ id: authId, nama: form.nama, role: form.role })
+      const { error: profInsertErr } = await supabase.from("profiles").insert({ id: authId, nama: form.nama, role: form.role, is_active: form.is_active })
       if (profInsertErr) {
         await adminAuth("delete", { id: authId })
         setErrorMsg(profInsertErr.message.includes("duplicate") || profInsertErr.message.includes("unique")
@@ -159,12 +188,12 @@ export default function UsersPage() {
           : profInsertErr.message)
         return
       }
-      if (form.role === "SANTRI" && form.santri_id) {
-        const { error: linkErr } = await supabase.from("santri").update({ profile_id: authId }).eq("id", form.santri_id)
+      if (form.role === "SANTRI" && form.santri_ids.length > 0) {
+        const { error: linkErr } = await supabase.from("wali_santri").insert(form.santri_ids.map((santri_id) => ({ profile_id: authId, santri_id })))
         if (linkErr) {
           await supabase.from("profiles").delete().eq("id", authId)
           await adminAuth("delete", { id: authId })
-          setErrorMsg("Gagal menghubungkan santri. Coba lagi.")
+          setErrorMsg("Gagal menghubungkan anak. Coba lagi.")
           return
         }
       }
@@ -188,17 +217,21 @@ export default function UsersPage() {
     if (!confirmDel) return
     const id = confirmDel.id
     setConfirmDel(null)
-    await supabase.from("santri").update({ profile_id: null }).eq("profile_id", id)
-    await supabase.from("pengajar").update({ profile_id: null }).eq("profile_id", id)
-    const { error: profDelErr } = await supabase.from("profiles").delete().eq("id", id)
-    if (profDelErr) {
-      setErrorMsg("Profil terhubung ke data lain. Hapus melalui halaman terkait terlebih dahulu.")
-      return
-    }
+    if (id === user?.id) { setErrorMsg("Akun admin yang sedang digunakan tidak dapat dihapus"); return }
+    const { error: deactivateErr } = await supabase.from("profiles").update({ is_active: false }).eq("id", id)
+    if (deactivateErr) { setErrorMsg(deactivateErr.message); return }
     try {
       await adminAuth("delete", { id })
     } catch (err) {
-      setErrorMsg((err as Error).message)
+      setErrorMsg(`${(err as Error).message}. Akun telah dinonaktifkan agar tidak dapat digunakan.`)
+      fetchData()
+      return
+    }
+    const { error: profDelErr } = await supabase.from("profiles").delete().eq("id", id)
+    if (profDelErr) {
+      setErrorMsg("Akun login telah dihapus, tetapi profil gagal dibersihkan. Coba hapus profil ini sekali lagi.")
+      fetchData()
+      return
     }
     fetchData()
   }
@@ -208,10 +241,9 @@ export default function UsersPage() {
     p.role.toLowerCase().includes(search.toLowerCase())
   )
 
-  const linkedSantriIds = santris.filter((s) => s.profile_id).map((s) => s.id)
-  const availableSantris = santris.filter((s) => !linkedSantriIds.includes(s.id))
   const linkedPengajarIds = pengajars.filter((p) => p.profile_id).map((p) => p.id)
   const availablePengajars = pengajars.filter((p) => !linkedPengajarIds.includes(p.id))
+  const selectablePengajars = pengajars.filter((p) => !p.profile_id || p.id === form.pengajar_id)
 
   return (
     <div className="space-y-6">
@@ -243,6 +275,7 @@ export default function UsersPage() {
               <TableRow>
                 <TableHead>Nama</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Terhubung</TableHead>
                 <TableHead>Terdaftar</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
@@ -251,7 +284,7 @@ export default function UsersPage() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     Tidak ada akun ditemukan
                   </TableCell>
                 </TableRow>
@@ -262,8 +295,11 @@ export default function UsersPage() {
                     <TableCell>
                       <Badge variant="outline">{formatRole(p.role)}</Badge>
                     </TableCell>
+                    <TableCell><Badge variant={p.is_active === false ? "destructive" : "secondary"}>{p.is_active === false ? "Nonaktif" : "Aktif"}</Badge></TableCell>
                     <TableCell className="text-muted-foreground">
-                      {p.santri?.nama ?? p.pengajar?.nama ?? "-"}
+                      {p.role === "SANTRI"
+                        ? <span className="block max-w-56 truncate" title={p.wali_santri?.map((relasi) => relasi.santri?.nama).filter(Boolean).join(", ")}>{p.wali_santri?.map((relasi) => relasi.santri?.nama).filter(Boolean).join(", ") || "-"}</span>
+                        : p.pengajar?.nama ?? "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(p.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
@@ -304,7 +340,7 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={form.role} onValueChange={(v: string | null) => v && setForm({ ...form, role: v, santri_id: "", pengajar_id: "" })} items={[{ label: "Admin", value: "ADMIN" }, { label: "Pengajar", value: "PENGAJAR" }, { label: "Santri", value: "SANTRI" }]}>
+              <Select value={form.role} onValueChange={(v: string | null) => v && setForm({ ...form, role: v, santri_ids: [], pengajar_id: "" })} items={[{ label: "Admin", value: "ADMIN" }, { label: "Pengajar", value: "PENGAJAR" }, { label: "Santri", value: "SANTRI" }]} disabled={editing?.id === user?.id}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ADMIN">Admin</SelectItem>
@@ -313,27 +349,33 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </div>
-            {form.role === "SANTRI" && !editing && (
+            {form.role === "SANTRI" && (
               <div className="space-y-2">
-                <Label>Santri</Label>
-                <Select
-                  value={form.santri_id}
-                  onValueChange={(v: string | null) => {
-                    if (!v) return
-                    const santri = santris.find((s) => s.id === v)
-                    setForm({ ...form, santri_id: v, nama: santri ? santri.nama : form.nama })
-                  }}
-                  items={availableSantris.map((s) => ({ label: s.nama, value: s.id }))}
-                >
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Pilih santri" /></SelectTrigger>
-                  <SelectContent>
-                    {availableSantris.map((s) => <SelectItem key={s.id} value={s.id}>{s.nama}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {availableSantris.length === 0 && <p className="text-xs text-muted-foreground">Semua santri sudah memiliki akun</p>}
+                <Label>Anak yang terhubung</Label>
+                <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-input p-2">
+                  {santris.map((santri) => {
+                    const checked = form.santri_ids.includes(santri.id)
+                    return (
+                      <label key={santri.id} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => setForm({
+                            ...form,
+                            santri_ids: checked ? form.santri_ids.filter((id) => id !== santri.id) : [...form.santri_ids, santri.id],
+                          })}
+                          className="h-4 w-4 rounded border-input"
+                        />
+                        <span>{santri.nama}</span>
+                      </label>
+                    )
+                  })}
+                  {santris.length === 0 && <p className="px-2 py-1 text-xs text-muted-foreground">Belum ada data santri.</p>}
+                </div>
+                <p className="text-xs text-muted-foreground">Pilih minimal satu anak untuk akun orang tua/wali.</p>
               </div>
             )}
-            {form.role === "PENGAJAR" && !editing && (
+            {form.role === "PENGAJAR" && (
               <div className="space-y-2">
                 <Label>Pengajar</Label>
                 <Select
@@ -343,14 +385,22 @@ export default function UsersPage() {
                     const pengajar = pengajars.find((p) => p.id === v)
                     setForm({ ...form, pengajar_id: v, nama: pengajar ? pengajar.nama : form.nama })
                   }}
-                  items={availablePengajars.map((p) => ({ label: p.nama, value: p.id }))}
+                  items={selectablePengajars.map((p) => ({ label: p.nama, value: p.id }))}
                 >
                   <SelectTrigger className="h-9"><SelectValue placeholder="Pilih pengajar" /></SelectTrigger>
                   <SelectContent>
-                    {availablePengajars.map((p) => <SelectItem key={p.id} value={p.id}>{p.nama}</SelectItem>)}
+                    {selectablePengajars.map((p) => <SelectItem key={p.id} value={p.id}>{p.nama}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 {availablePengajars.length === 0 && <p className="text-xs text-muted-foreground">Semua pengajar sudah memiliki akun</p>}
+              </div>
+            )}
+            {editing && (
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div><Label>Status akun</Label><p className="text-xs text-muted-foreground">Akun nonaktif tidak dapat masuk ke sistem.</p></div>
+                <Button type="button" variant={form.is_active ? "default" : "outline"} size="sm" disabled={editing.id === user?.id} onClick={() => setForm({ ...form, is_active: !form.is_active })}>
+                  {form.is_active ? "Aktif" : "Nonaktif"}
+                </Button>
               </div>
             )}
             <div className="space-y-2">

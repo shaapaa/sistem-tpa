@@ -11,12 +11,12 @@ function service() {
   })
 }
 
-async function isAdmin() {
+async function getCurrentAdmin() {
   const supabase = await createAnonServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return false
-  const { data } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-  return data?.role === "ADMIN"
+  if (!user) return null
+  const { data } = await supabase.from("profiles").select("id, role, is_active").eq("id", user.id).single()
+  return data?.role === "ADMIN" && data.is_active !== false ? data : null
 }
 
 function authError(message: string): string {
@@ -34,7 +34,7 @@ function authError(message: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await isAdmin())) {
+  if (!(await getCurrentAdmin())) {
     return NextResponse.json({ message: "Tidak diizinkan" }, { status: 403 })
   }
 
@@ -76,7 +76,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!(await isAdmin())) {
+  const currentAdmin = await getCurrentAdmin()
+  if (!currentAdmin) {
     return NextResponse.json({ message: "Tidak diizinkan" }, { status: 403 })
   }
 
@@ -84,7 +85,19 @@ export async function DELETE(request: NextRequest) {
   if (!id) {
     return NextResponse.json({ message: "ID wajib diisi" }, { status: 400 })
   }
-  const { error } = await service().auth.admin.deleteUser(id)
+  if (id === currentAdmin.id) {
+    return NextResponse.json({ message: "Akun admin yang sedang digunakan tidak dapat dihapus" }, { status: 400 })
+  }
+  const client = service()
+  const { data: target } = await client.from("profiles").select("role").eq("id", id).maybeSingle()
+  if (target?.role === "ADMIN") {
+    const { count, error: countError } = await client.from("profiles").select("id", { count: "exact", head: true }).eq("role", "ADMIN").neq("is_active", false)
+    if (countError) return NextResponse.json({ message: authError(countError.message) }, { status: 400 })
+    if ((count ?? 0) <= 1) {
+      return NextResponse.json({ message: "Admin aktif terakhir tidak dapat dihapus" }, { status: 400 })
+    }
+  }
+  const { error } = await client.auth.admin.deleteUser(id)
   if (error) return NextResponse.json({ message: authError(error.message) }, { status: 400 })
   return NextResponse.json({})
 }

@@ -15,7 +15,7 @@ export function RoleLayout({
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && profile?.role !== role) {
+    if (!loading && (profile?.is_active === false || profile?.role !== role)) {
       router.push("/login");
     }
   }, [profile, loading, router, role]);
@@ -26,6 +26,10 @@ export function RoleLayout({
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-600 border-t-transparent" />
       </div>
     );
+  }
+
+  if (!profile || profile.is_active === false || profile.role !== role) {
+    return null;
   }
 
   return <div className="p-4 lg:p-6">{children}</div>;

@@ -8,6 +8,7 @@ interface UserProfile {
   id: string;
   nama: string;
   role: "ADMIN" | "PENGAJAR" | "SANTRI";
+  is_active: boolean | null;
 }
 
 interface AuthContextType {
@@ -40,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         const { data } = await supabase
           .from("profiles")
-          .select("id, nama, role")
+          .select("id, nama, role, is_active")
           .eq("id", user.id)
           .single();
         setProfile(data);
@@ -58,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           const { data } = await supabase
             .from("profiles")
-            .select("id, nama, role")
+            .select("id, nama, role, is_active")
             .eq("id", session.user.id)
             .single();
           setProfile(data);
