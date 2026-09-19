@@ -45,14 +45,20 @@ export default function PerkembanganPage() {
   const { user } = useAuth();
   const [kelompoks, setKelompoks] = useState<Kelompok[]>([]);
   const [selectedKelompok, setSelectedKelompok] = useState("");
+  const [loadingKelompoks, setLoadingKelompoks] = useState(true);
+  const [kelompokError, setKelompokError] = useState("");
   const [santris, setSantris] = useState<Santri[]>([]);
   const [selectedSantri, setSelectedSantri] = useState("");
   const [search, setSearch] = useState("");
+  const [loadingSantris, setLoadingSantris] = useState(false);
+  const [santriError, setSantriError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [surats, setSurats] = useState<Surat[]>([]);
   const [bacaanSurats, setBacaanSurats] = useState<Surat[]>([]);
+  const [loadingSurats, setLoadingSurats] = useState(true);
+  const [suratError, setSuratError] = useState("");
   const [doas, setDoas] = useState<Doa[]>([]);
   const [loadingDoas, setLoadingDoas] = useState(true);
   const [doaError, setDoaError] = useState("");
@@ -85,6 +91,12 @@ export default function PerkembanganPage() {
   const [catatanHafalanDoa, setCatatanHafalanDoa] = useState("");
   const [hafalanDoaTerakhir, setHafalanDoaTerakhir] = useState<HafalanDoaTerakhir | null>(null);
   const [loadingHafalanDoaTerakhir, setLoadingHafalanDoaTerakhir] = useState(false);
+  const [savingSurah, setSavingSurah] = useState(false);
+  const [savedSurah, setSavedSurah] = useState(false);
+  const [surahError, setSurahError] = useState("");
+  const [savingDoa, setSavingDoa] = useState(false);
+  const [savedDoa, setSavedDoa] = useState(false);
+  const [hafalanDoaError, setHafalanDoaError] = useState("");
 
   // Praktik Salat form: kemampuan gerakan umum dan niat per jenis salat.
   const [gerakanStatus, setGerakanStatus] = useState<Record<string, string>>({});
@@ -101,6 +113,8 @@ export default function PerkembanganPage() {
 
   useEffect(() => {
     const fetchMasters = async () => {
+      setLoadingSurats(true)
+      setSuratError("")
       setLoadingDoas(true)
       setDoaError("")
       setLoadingSalatMasters(true)
@@ -113,8 +127,14 @@ export default function PerkembanganPage() {
           supabase.from("komponen_salat").select("id, nama").eq("aktif", true).order("nama"),
           supabase.from("jenis_salat").select("id, nama").eq("aktif", true).order("nama"),
         ])
-        setSurats(((suratRes.data ?? []) as Surat[]).sort((a, b) => progressionOrder(a.nomor) - progressionOrder(b.nomor)))
-        setBacaanSurats((bacaanSuratRes.data ?? []) as Surat[])
+        if (suratRes.error || bacaanSuratRes.error) {
+          setSurats([])
+          setBacaanSurats([])
+          setSuratError("Master Surah gagal dimuat. Coba muat ulang halaman.")
+        } else {
+          setSurats(((suratRes.data ?? []) as Surat[]).sort((a, b) => progressionOrder(a.nomor) - progressionOrder(b.nomor)))
+          setBacaanSurats((bacaanSuratRes.data ?? []) as Surat[])
+        }
         if (doaRes.error) {
           setDoas([])
           setDoaError("Master Doa gagal dimuat. Coba muat ulang halaman.")
@@ -129,12 +149,16 @@ export default function PerkembanganPage() {
           setSalatMasterError("Master Praktik Salat gagal dimuat. Coba muat ulang halaman.")
         }
       } catch {
+        setSurats([])
+        setBacaanSurats([])
+        setSuratError("Master Surah gagal dimuat. Coba muat ulang halaman.")
         setDoas([])
         setDoaError("Master Doa gagal dimuat. Coba muat ulang halaman.")
         setKomponens([])
         setJenisSalats([])
         setSalatMasterError("Master Praktik Salat gagal dimuat. Coba muat ulang halaman.")
       } finally {
+        setLoadingSurats(false)
         setLoadingDoas(false)
         setLoadingSalatMasters(false)
       }
@@ -144,22 +168,46 @@ export default function PerkembanganPage() {
 
   useEffect(() => {
     const fetchPengajar = async () => {
-      if (!user) return
-      const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
-      if (!pengajar) return
-      const { data: k } = await supabase.from("kelompok").select("id, nama").eq("pengajar_id", pengajar.id).order("nama")
-      setKelompoks((k ?? []) as Kelompok[])
+      if (!user) {
+        setLoadingKelompoks(false)
+        return
+      }
+      setLoadingKelompoks(true)
+      setKelompokError("")
+      const { data: pengajar, error: pengajarError } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
+      if (pengajarError || !pengajar) {
+        setKelompoks([])
+        setKelompokError("Penugasan Pengajar tidak dapat dimuat. Coba muat ulang halaman.")
+        setLoadingKelompoks(false)
+        return
+      }
+      const { data: k, error } = await supabase.from("kelompok").select("id, nama").eq("pengajar_id", pengajar.id).order("nama")
+      if (error) {
+        setKelompoks([])
+        setKelompokError("Daftar kelompok tidak dapat dimuat. Coba muat ulang halaman.")
+      } else {
+        setKelompoks((k ?? []) as Kelompok[])
+      }
+      setLoadingKelompoks(false)
     }
     fetchPengajar()
   }, [user])
 
   useEffect(() => {
     const fetchSantris = async () => {
-      if (!selectedKelompok) { setSantris([]); return; }
-      const { data } = await supabase.from("santri").select("id, nama, kelompok_id").eq("kelompok_id", selectedKelompok).eq("is_active", true).order("nama")
-      setSantris((data ?? []) as Santri[])
+      if (!selectedKelompok) { setSantris([]); setSantriError(""); setLoadingSantris(false); return; }
+      setLoadingSantris(true)
+      setSantriError("")
+      const { data, error } = await supabase.from("santri").select("id, nama, kelompok_id").eq("kelompok_id", selectedKelompok).eq("is_active", true).order("nama")
+      if (error) {
+        setSantris([])
+        setSantriError("Daftar Santri tidak dapat dimuat. Coba pilih kelompok lagi atau muat ulang halaman.")
+      } else {
+        setSantris((data ?? []) as Santri[])
+      }
       setSelectedSantri("")
       setSearch("")
+      setLoadingSantris(false)
     }
     fetchSantris()
   }, [selectedKelompok])
@@ -267,6 +315,33 @@ export default function PerkembanganPage() {
     setStatusHafalanDoa("LANCAR")
     setCatatanHafalanDoa("")
     setHafalanDoaTerakhir(null)
+    setSavingDoa(false)
+    setSavedDoa(false)
+    setHafalanDoaError("")
+  }
+
+  const resetHafalanSurahForm = () => {
+    setSuratId("")
+    setAyatMulai("")
+    setAyatSelesai("")
+    setHafalanProgress(null)
+    setStatusHafalan("LANCAR")
+    setCatatanHafalan("")
+    setSavingSurah(false)
+    setSavedSurah(false)
+    setSurahError("")
+  }
+
+  const resetHafalanForms = () => {
+    resetHafalanSurahForm()
+    resetHafalanDoaForm()
+    setJenisHafalan("SURAT")
+  }
+
+  const handleJenisHafalanChange = (jenis: string | null) => {
+    setJenisHafalan(jenis ?? "SURAT")
+    resetHafalanSurahForm()
+    resetHafalanDoaForm()
   }
 
   const resetPraktikSalatForm = () => {
@@ -285,23 +360,15 @@ export default function PerkembanganPage() {
     setSelectedKelompok(kelompokId ?? "")
     setSelectedSantri("")
     setSearch("")
-    setSuratId("")
-    setAyatMulai("")
-    setAyatSelesai("")
-    setHafalanProgress(null)
     resetBacaanForm()
-    resetHafalanDoaForm()
+    resetHafalanForms()
     resetPraktikSalatForm()
   }
 
   const handleSelectSantri = (santriId: string) => {
     setSelectedSantri(santriId)
-    setSuratId("")
-    setAyatMulai("")
-    setAyatSelesai("")
-    setHafalanProgress(null)
     resetBacaanForm()
-    resetHafalanDoaForm()
+    resetHafalanForms()
     resetPraktikSalatForm()
   }
 
@@ -374,17 +441,18 @@ export default function PerkembanganPage() {
 
   const handleSaveHafalan = async () => {
     if (!selectedSantri || !user) return
-    setErrorMsg("")
     const sampai = parseInt(ayatSelesai) || 0
     if (jenisHafalan === "SURAT") {
-      if (!suratId) { setErrorMsg("Pilih surah terlebih dahulu"); return }
-      if (!sampai) { setErrorMsg("Isi ayat terakhir yang dihafal"); return }
-      if (hafalanProgress?.selesai) { setErrorMsg("Hafalan surat ini sudah selesai"); return }
+      setSurahError("")
+      if (!suratId) { setSurahError("Pilih surah terlebih dahulu"); return }
+      if (!sampai) { setSurahError("Isi ayat terakhir yang dihafal"); return }
+      if (hafalanProgress?.selesai) { setSurahError("Hafalan surat ini sudah selesai"); return }
     } else {
-      if (!doaId) { setErrorMsg("Pilih doa terlebih dahulu"); return }
+      setHafalanDoaError("")
+      if (!doaId) { setHafalanDoaError("Pilih doa terlebih dahulu"); return }
     }
-    setSaving(true); setSaved(false)
     if (jenisHafalan === "SURAT") {
+      setSavingSurah(true); setSavedSurah(false)
       const { data, error } = await supabase.rpc("create_hafalan_cicilan", {
         p_santri_id: selectedSantri,
         p_surat_id: suratId,
@@ -393,9 +461,9 @@ export default function PerkembanganPage() {
         p_catatan: catatanHafalan || null,
       })
       if (error) {
-        setErrorMsg(saveErrorMessage(error, "Setoran hafalan gagal disimpan"))
+        setSurahError(saveErrorMessage(error, "Setoran hafalan gagal disimpan"))
         await loadAyatMulai()
-        setSaving(false)
+        setSavingSurah(false)
         return
       }
       const cicilanTersimpan = (data?.[0] ?? null) as {
@@ -419,9 +487,11 @@ export default function PerkembanganPage() {
       }
       await loadAyatMulai()
       setCatatanHafalan("")
+      setSavingSurah(false); setSavedSurah(true); setTimeout(() => setSavedSurah(false), 2500)
     } else {
+      setSavingDoa(true); setSavedDoa(false)
       const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
-      if (!pengajar) { setErrorMsg("Profil pengajar tidak ditemukan"); setSaving(false); return }
+      if (!pengajar) { setHafalanDoaError("Profil pengajar tidak ditemukan"); setSavingDoa(false); return }
       const { error } = await supabase.from("perkembangan_hafalan_doa").insert({
         santri_id: selectedSantri,
         doa_id: doaId,
@@ -430,10 +500,13 @@ export default function PerkembanganPage() {
         status: statusHafalanDoa,
         catatan: catatanHafalanDoa || null,
       })
-      if (error) { setErrorMsg(saveErrorMessage(error, "Hafalan doa gagal disimpan")); setSaving(false); return }
+      if (error) { setHafalanDoaError(saveErrorMessage(error, "Hafalan doa gagal disimpan")); setSavingDoa(false); return }
+      setDoaId("")
+      setStatusHafalanDoa("LANCAR")
+      setCatatanHafalanDoa("")
+      setHafalanDoaTerakhir(null)
+      setSavingDoa(false); setSavedDoa(true); setTimeout(() => setSavedDoa(false), 2500)
     }
-    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
-    if (jenisHafalan === "DOA") resetHafalanDoaForm()
   }
 
   const handleSaveGerakanSalat = async () => {
@@ -505,20 +578,34 @@ export default function PerkembanganPage() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Kelompok</Label>
-          <Select value={selectedKelompok} onValueChange={handleKelompokChange} items={kelompoks.map((k) => ({ label: `Kelompok ${k.nama}`, value: k.id }))}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelompok" /></SelectTrigger>
-            <SelectContent>
-              {kelompoks.map((k) => <SelectItem key={k.id} value={k.id}>Kelompok {k.nama}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          {loadingKelompoks ? (
+            <div className="h-9 animate-pulse rounded-md bg-muted" />
+          ) : kelompokError ? (
+            <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{kelompokError}</p>
+          ) : kelompoks.length === 0 ? (
+            <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Belum ada kelompok yang ditugaskan kepada Anda. Hubungi Admin TPA.</p>
+          ) : (
+            <Select value={selectedKelompok} onValueChange={handleKelompokChange} items={kelompoks.map((k) => ({ label: `Kelompok ${k.nama}`, value: k.id }))}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelompok" /></SelectTrigger>
+              <SelectContent>
+                {kelompoks.map((k) => <SelectItem key={k.id} value={k.id}>Kelompok {k.nama}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <div className="space-y-2">
           <Label>Santri ({santris.length})</Label>
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-3" placeholder="Cari nama santri..." disabled={!selectedKelompok} />
+          {loadingSantris ? (
+            <div className="h-9 animate-pulse rounded-md bg-muted" />
+          ) : santriError ? (
+            <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{santriError}</p>
+          ) : (
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-3" placeholder="Cari nama santri..." disabled={!selectedKelompok || kelompoks.length === 0} />
+          )}
         </div>
       </div>
 
-      {selectedKelompok && !selectedSantri && (
+      {selectedKelompok && !selectedSantri && !loadingSantris && !santriError && (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="max-h-72 overflow-y-auto">
             {filteredSantris.length === 0 ? (
@@ -555,7 +642,7 @@ export default function PerkembanganPage() {
                 <p className="font-medium text-foreground">{santris.find((s) => s.id === selectedSantri)?.nama ?? "Santri"}</p>
               </div>
             </div>
-            <Button variant="outline" onClick={() => { setSelectedSantri(""); setSearch(""); resetBacaanForm(); resetHafalanDoaForm(); resetPraktikSalatForm() }} className="h-9">
+            <Button variant="outline" onClick={() => { setSelectedSantri(""); setSearch(""); resetBacaanForm(); resetHafalanForms(); resetPraktikSalatForm() }} className="h-9">
               <ArrowLeft className="mr-2 h-4 w-4" /> Ganti santri
             </Button>
           </div>
@@ -602,12 +689,20 @@ export default function PerkembanganPage() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Surah</Label>
+                        {loadingSurats ? (
+                          <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Memuat master Surah...</p>
+                        ) : suratError ? (
+                          <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{suratError}</p>
+                        ) : bacaanSurats.length === 0 ? (
+                          <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Belum ada Surah aktif yang dapat dipilih.</p>
+                        ) : (
                         <SearchableSelect
                           value={quranSuratId}
                           onChange={setQuranSuratId}
                           placeholder="Cari surah dari 30 juz"
                           options={bacaanSurats.map((s) => ({ value: s.id, label: `${s.nomor}. ${s.nama} — Juz ${s.juz}` }))}
                         />
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label>Juz</Label>
@@ -641,7 +736,7 @@ export default function PerkembanganPage() {
                   <Textarea value={catatanBacaan} onChange={(e) => setCatatanBacaan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
                 {errorMsg && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
-                <Button onClick={handleSaveBacaan} disabled={saving} className="h-9 px-4">
+                <Button onClick={handleSaveBacaan} disabled={saving || (jenisBacaan === "QURAN" && (loadingSurats || Boolean(suratError) || bacaanSurats.length === 0))} className="h-9 px-4">
                   {saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
                 </Button>
               </CardContent>
@@ -654,7 +749,7 @@ export default function PerkembanganPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Jenis Hafalan</Label>
-                  <Select value={jenisHafalan} onValueChange={(v) => setJenisHafalan(v ?? "SURAT")} items={[{ label: "Hafalan Surat", value: "SURAT" }, { label: "Hafalan Doa", value: "DOA" }]}>
+                  <Select value={jenisHafalan} onValueChange={handleJenisHafalanChange} items={[{ label: "Hafalan Surat", value: "SURAT" }, { label: "Hafalan Doa", value: "DOA" }]}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="SURAT">Hafalan Surat</SelectItem>
@@ -667,12 +762,20 @@ export default function PerkembanganPage() {
                   <>
                     <div className="space-y-2">
                       <Label>Surah (Juz 30 + Al-Fatihah)</Label>
-                      <SearchableSelect
-                        value={suratId}
-                        onChange={setSuratId}
-                        placeholder="Pilih surah"
-                        options={surats.map((s) => ({ value: s.id, label: `${s.nama} (${s.jumlah_ayat} ayat)` }))}
-                      />
+                      {loadingSurats ? (
+                        <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Memuat master Surah...</p>
+                      ) : suratError ? (
+                        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{suratError}</p>
+                      ) : surats.length === 0 ? (
+                        <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Belum ada Surah yang dapat dipilih.</p>
+                      ) : (
+                        <SearchableSelect
+                          value={suratId}
+                          onChange={setSuratId}
+                          placeholder="Pilih surah"
+                          options={surats.map((s) => ({ value: s.id, label: `${s.nama} (${s.jumlah_ayat} ayat)` }))}
+                        />
+                      )}
                     </div>
                     {suratId && (
                       <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm">
@@ -742,7 +845,8 @@ export default function PerkembanganPage() {
                   </>
                 )}
 
-                {errorMsg && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
+                {jenisHafalan === "SURAT" && surahError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{surahError}</p>}
+                {jenisHafalan === "DOA" && hafalanDoaError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{hafalanDoaError}</p>}
 
                 <div className="space-y-2">
                   <Label>Status</Label>
@@ -757,8 +861,8 @@ export default function PerkembanganPage() {
                   <Label>Catatan (Opsional)</Label>
                   <Textarea value={jenisHafalan === "DOA" ? catatanHafalanDoa : catatanHafalan} onChange={(e) => jenisHafalan === "DOA" ? setCatatanHafalanDoa(e.target.value) : setCatatanHafalan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
-                <Button onClick={handleSaveHafalan} disabled={saving || (jenisHafalan === "SURAT" && (loadingHafalanProgress || hafalanProgress?.selesai)) || (jenisHafalan === "DOA" && (loadingDoas || Boolean(doaError) || doas.length === 0))} className="h-9 px-4">
-                  {saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
+                <Button onClick={handleSaveHafalan} disabled={(jenisHafalan === "SURAT" && (savingSurah || loadingSurats || Boolean(suratError) || surats.length === 0 || loadingHafalanProgress || hafalanProgress?.selesai)) || (jenisHafalan === "DOA" && (savingDoa || loadingDoas || Boolean(doaError) || doas.length === 0))} className="h-9 px-4">
+                  {jenisHafalan === "SURAT" ? (savingSurah ? "Menyimpan..." : savedSurah ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>) : (savingDoa ? "Menyimpan..." : savedDoa ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>)}
                 </Button>
               </CardContent>
             </Card>

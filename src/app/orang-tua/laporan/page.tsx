@@ -27,6 +27,9 @@ type CicilanRow = { id: string; tanggal: string; ayat_mulai: number | null; ayat
 type DoaRow = { id: string; tanggal: string; status: string | null; catatan: string | null; doa?: { nama: string } | null }
 type KomponenRow = { id: string; tanggal: string; status: string | null; catatan: string | null; komponen_salat_id: string; komponen_salat?: { nama: string } | null }
 type PraktikRow = { id: string; tanggal: string; status: string | null; catatan: string | null; jenis_salat_id: string; jenis_salat?: { nama: string } | null }
+type GerakanSalatRow = { id: string; tanggal: string; catatan: string | null }
+type GerakanSalatKomponenRow = { id: string; perkembangan_gerakan_salat_id: string; status: string; komponen_salat?: { nama: string } | null }
+type NiatSalatRow = { id: string; tanggal: string; status: string; catatan: string | null; jenis_salat?: { nama: string } | null }
 
 const BAC_STATUS: Record<string, string> = { LANCAR: "Lancar", KURANG_LANCAR: "Kurang Lancar", TIDAK_LANCAR: "Tidak Lancar" }
 const SALAT_STATUS: Record<string, string> = { LANCAR: "Lancar", BUTUH_BIMBINGAN: "Butuh Bimbingan" }
@@ -51,12 +54,16 @@ export default function OrangTuaLaporanPage() {
   const [doas, setDoas] = useState<DoaRow[]>([]);
   const [komponenRows, setKomponenRows] = useState<KomponenRow[]>([]);
   const [praktiks, setPraktiks] = useState<PraktikRow[]>([]);
+  const [gerakanSalats, setGerakanSalats] = useState<GerakanSalatRow[]>([]);
+  const [gerakanSalatKomponens, setGerakanSalatKomponens] = useState<GerakanSalatKomponenRow[]>([]);
+  const [niatSalats, setNiatSalats] = useState<NiatSalatRow[]>([]);
   // Riwayat mengikuti periode; data cumulative adalah snapshot capaian sampai tanggal akhir periode.
   const [cumulativeBacaans, setCumulativeBacaans] = useState<BacaanRow[]>([]);
   const [cumulativeCicilans, setCumulativeCicilans] = useState<CicilanRow[]>([]);
   const [cumulativeDoas, setCumulativeDoas] = useState<DoaRow[]>([]);
   const [cumulativeKomponenRows, setCumulativeKomponenRows] = useState<KomponenRow[]>([]);
   const [cumulativePraktiks, setCumulativePraktiks] = useState<PraktikRow[]>([]);
+  const [cumulativeNiatSalats, setCumulativeNiatSalats] = useState<NiatSalatRow[]>([]);
   const [komponens, setKomponens] = useState<{ id: string; nama: string }[]>([]);
   const [jenisSalats, setJenisSalats] = useState<{ id: string; nama: string }[]>([]);
   const [totalDoa, setTotalDoa] = useState(0);
@@ -96,11 +103,15 @@ export default function OrangTuaLaporanPage() {
         setDoas([]);
         setKomponenRows([]);
         setPraktiks([]);
+        setGerakanSalats([]);
+        setGerakanSalatKomponens([]);
+        setNiatSalats([]);
         setCumulativeBacaans([]);
         setCumulativeCicilans([]);
         setCumulativeDoas([]);
         setCumulativeKomponenRows([]);
         setCumulativePraktiks([]);
+        setCumulativeNiatSalats([]);
         return;
       }
       setLoading(true);
@@ -111,20 +122,26 @@ export default function OrangTuaLaporanPage() {
       setDoas([]);
       setKomponenRows([]);
       setPraktiks([]);
+      setGerakanSalats([]);
+      setGerakanSalatKomponens([]);
+      setNiatSalats([]);
       setCumulativeBacaans([]);
       setCumulativeCicilans([]);
       setCumulativeDoas([]);
       setCumulativeKomponenRows([]);
       setCumulativePraktiks([]);
+      setCumulativeNiatSalats([]);
       const start = `${dateFrom}T00:00:00`;
       const end = `${dateTo}T23:59:59`;
-      const [pr, ba, ci, doa, ko, pk, komM, js, doaCount, cumBa, cumCi, cumDoa, cumKo, cumPk] = await Promise.all([
+      const [pr, ba, ci, doa, ko, pk, ge, ni, komM, js, doaCount, cumBa, cumCi, cumDoa, cumKo, cumPk, cumNi] = await Promise.all([
         supabase.from("presensi").select("id, tanggal, status, keterangan").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
         supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, ayat_mulai, ayat_selesai, status, catatan, surat(nama)").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
         supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri!inner(santri_id, surat_id, surat(nama, jumlah_ayat, nomor))").eq("hafalan_santri.santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
         supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
         supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat_id, komponen_salat(nama)").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
         supabase.from("praktik_salat").select("id, tanggal, status, catatan, jenis_salat_id, jenis_salat(nama)").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_gerakan_salat").select("id, tanggal, catatan").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_niat_salat").select("id, tanggal, status, catatan, jenis_salat(nama)").eq("santri_id", activeSantriId).gte("tanggal", start).lte("tanggal", end).order("tanggal", { ascending: false }),
         supabase.from("komponen_salat").select("id, nama").eq("aktif", true).order("nama"),
         supabase.from("jenis_salat").select("id, nama").eq("aktif", true).order("nama"),
         supabase.from("doa").select("id", { count: "exact", head: true }).eq("aktif", true),
@@ -133,9 +150,15 @@ export default function OrangTuaLaporanPage() {
         supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", activeSantriId).lte("tanggal", end).order("tanggal", { ascending: false }),
         supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat_id, komponen_salat(nama)").eq("santri_id", activeSantriId).lte("tanggal", end).order("tanggal", { ascending: false }),
         supabase.from("praktik_salat").select("id, tanggal, status, catatan, jenis_salat_id, jenis_salat(nama)").eq("santri_id", activeSantriId).lte("tanggal", end).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_niat_salat").select("id, tanggal, status, catatan, jenis_salat(nama)").eq("santri_id", activeSantriId).lte("tanggal", end).order("tanggal", { ascending: false }),
       ]);
       if (cancelled) return;
-      const laporanError = [pr, ba, ci, doa, ko, pk, komM, js, doaCount, cumBa, cumCi, cumDoa, cumKo, cumPk].find((result) => result.error)?.error;
+      const gerakanIds = (ge.data ?? []).map((row) => row.id);
+      const gerakanKomponen = gerakanIds.length > 0
+        ? await supabase.from("perkembangan_gerakan_salat_komponen").select("id, perkembangan_gerakan_salat_id, status, komponen_salat(nama)").in("perkembangan_gerakan_salat_id", gerakanIds)
+        : { data: [], error: null };
+      if (cancelled) return;
+      const laporanError = [pr, ba, ci, doa, ko, pk, ge, ni, komM, js, doaCount, cumBa, cumCi, cumDoa, cumKo, cumPk, cumNi, gerakanKomponen].find((result) => result.error)?.error;
       if (laporanError) {
         setError("Data laporan tidak dapat dimuat. Silakan coba lagi.");
         setLoading(false);
@@ -147,11 +170,15 @@ export default function OrangTuaLaporanPage() {
       setDoas((doa.data ?? []) as unknown as DoaRow[]);
       setKomponenRows((ko.data ?? []) as unknown as KomponenRow[]);
       setPraktiks((pk.data ?? []) as unknown as PraktikRow[]);
+      setGerakanSalats((ge.data ?? []) as unknown as GerakanSalatRow[]);
+      setGerakanSalatKomponens((gerakanKomponen.data ?? []) as unknown as GerakanSalatKomponenRow[]);
+      setNiatSalats((ni.data ?? []) as unknown as NiatSalatRow[]);
       setCumulativeBacaans((cumBa.data ?? []) as unknown as BacaanRow[]);
       setCumulativeCicilans((cumCi.data ?? []) as unknown as CicilanRow[]);
       setCumulativeDoas((cumDoa.data ?? []) as unknown as DoaRow[]);
       setCumulativeKomponenRows((cumKo.data ?? []) as unknown as KomponenRow[]);
       setCumulativePraktiks((cumPk.data ?? []) as unknown as PraktikRow[]);
+      setCumulativeNiatSalats((cumNi.data ?? []) as unknown as NiatSalatRow[]);
       setKomponens((komM.data ?? []) as { id: string; nama: string }[]);
       setJenisSalats((js.data ?? []) as { id: string; nama: string }[]);
       setTotalDoa(doaCount.count ?? 0);
@@ -233,8 +260,13 @@ export default function OrangTuaLaporanPage() {
   cumulativeKomponenRows.forEach((r) => { if (!komponenLatest.has(r.komponen_salat_id)) komponenLatest.set(r.komponen_salat_id, { status: r.status ?? "", tanggal: r.tanggal }); });
   const praktikLatest = new Map<string, { status: string; tanggal: string }>();
   cumulativePraktiks.forEach((r) => { if (!praktikLatest.has(r.jenis_salat_id)) praktikLatest.set(r.jenis_salat_id, { status: r.status ?? "", tanggal: r.tanggal }); });
-  const salatLancar = [...praktikLatest.values()].filter((s) => s.status === "LANCAR").length;
-  const salatBimbingan = [...praktikLatest.values()].filter((s) => s.status === "BUTUH_BIMBINGAN").length;
+  const niatLatest = new Map<string, { status: string; tanggal: string }>();
+  cumulativeNiatSalats.forEach((r) => {
+    const nama = r.jenis_salat?.nama;
+    if (nama && !niatLatest.has(nama)) niatLatest.set(nama, { status: r.status, tanggal: r.tanggal });
+  });
+  const salatLancar = [...niatLatest.values()].filter((s) => s.status === "LANCAR").length;
+  const salatBimbingan = [...niatLatest.values()].filter((s) => s.status === "BUTUH_BIMBINGAN").length;
 
   const hafalanSuratPct = TARGET_SURAT ? Math.round((suratTuntas / TARGET_SURAT) * 100) : 0;
   const doaPct = doaTotal ? Math.round((doaDihafal / doaTotal) * 100) : 0;
@@ -246,8 +278,8 @@ export default function OrangTuaLaporanPage() {
       : `${bacaanLatest.surat?.nama ?? "-"} · Juz ${bacaanLatest.juz ?? "-"}`
     : "Belum ada catatan bacaan";
 
-  const noPeriodData = presensis.length === 0 && bacaans.length === 0 && cicilans.length === 0 && doas.length === 0 && komponenRows.length === 0 && praktiks.length === 0;
-  const noCumulativeData = cumulativeBacaans.length === 0 && cumulativeCicilans.length === 0 && cumulativeDoas.length === 0 && cumulativeKomponenRows.length === 0 && cumulativePraktiks.length === 0;
+  const noPeriodData = presensis.length === 0 && bacaans.length === 0 && cicilans.length === 0 && doas.length === 0 && komponenRows.length === 0 && praktiks.length === 0 && gerakanSalats.length === 0 && niatSalats.length === 0;
+  const noCumulativeData = cumulativeBacaans.length === 0 && cumulativeCicilans.length === 0 && cumulativeDoas.length === 0 && cumulativeKomponenRows.length === 0 && cumulativePraktiks.length === 0 && cumulativeNiatSalats.length === 0;
   const noData = noPeriodData && noCumulativeData;
   const periode = `${formatDate(dateFrom)} – ${formatDate(dateTo)}`;
 
@@ -268,14 +300,16 @@ export default function OrangTuaLaporanPage() {
           ["Bacaan", bacaanPosisi],
           ["Hafalan Surat", `${suratTuntas} dari ${TARGET_SURAT} surat tuntas (${hafalanSuratPct}%)`],
           ["Hafalan Doa", `${doaDihafal} dari ${doaTotal} doa (${doaPct}%)`],
-          ["Praktik Salat", `${salatLancar} dari ${jenisSalats.length} salat Lancar (${salatPct}%)`],
+          ["Niat Salat", `${salatLancar} dari ${jenisSalats.length} salat Lancar (${salatPct}%)`],
         ] },
         { title: "Perkembangan Bacaan", head: ["Tanggal", "Jenis", "Materi", "Status", "Catatan"], body: bacaans.map((r) => [formatDateShort(r.tanggal), r.jenis_bacaan === "IQRA" ? "Iqra" : "Al-Qur'an", bacaanDetail(r), BAC_STATUS[r.status ?? ""] ?? r.status ?? "-", r.catatan ?? "-"]) },
         { title: "Hafalan Surat", head: ["Surat", "Capaian", "Status Terakhir"], body: suratDetail.map((s) => [s.nama, `${s.max}/${s.jumlah} ayat · ${s.max >= s.jumlah ? "Tuntas" : "Sedang"}`, BAC_STATUS[s.latestStatus ?? ""] ?? s.latestStatus ?? "-"]) },
         { title: "Riwayat Cicilan Hafalan", head: ["Tanggal", "Surat", "Ayat", "Status"], body: cicilans.filter((c) => c.hafalan_santri?.surat).map((c) => [formatDateShort(c.tanggal), c.hafalan_santri?.surat?.nama ?? "-", `${c.ayat_mulai}-${c.ayat_selesai}`, BAC_STATUS[c.status ?? ""] ?? c.status ?? "-"]) },
         { title: "Hafalan Doa", head: ["Doa", "Status", "Tanggal"], body: doaList.map((d) => [d.nama, BAC_STATUS[d.status ?? ""] ?? d.status ?? "-", formatDateShort(d.tanggal)]) },
-        { title: "Komponen Salat", head: ["Komponen", "Status", "Tanggal"], body: komponens.map((k) => { const st = komponenLatest.get(k.id); return [k.nama, SALAT_STATUS[st?.status ?? ""] ?? "Belum Dinilai", st?.status ? formatDateShort(st.tanggal) : "-"]; }) },
-        { title: "Praktik Salat", head: ["Salat", "Status", "Tanggal"], body: jenisSalats.map((j) => { const st = praktikLatest.get(j.id); return [j.nama, SALAT_STATUS[st?.status ?? ""] ?? "Belum Dinilai", st?.status ? formatDateShort(st.tanggal) : "-"]; }) },
+        { title: "Praktik Salat — Gerakan (Model Baru)", head: ["Tanggal", "Komponen Gerakan", "Status", "Catatan Sesi"], body: gerakanSalatKomponens.map((detail) => { const parent = gerakanSalats.find((gerakan) => gerakan.id === detail.perkembangan_gerakan_salat_id); return [parent ? formatDateShort(parent.tanggal) : "-", detail.komponen_salat?.nama ?? "-", SALAT_STATUS[detail.status] ?? detail.status, parent?.catatan ?? "-"]; }) },
+        { title: "Praktik Salat — Niat (Model Baru)", head: ["Tanggal", "Jenis Salat", "Status", "Catatan"], body: niatSalats.map((r) => [formatDateShort(r.tanggal), r.jenis_salat?.nama ?? "-", SALAT_STATUS[r.status] ?? r.status, r.catatan ?? "-"]) },
+        ...(cumulativeKomponenRows.length > 0 ? [{ title: "Riwayat Praktik Salat Lama — Komponen", head: ["Komponen", "Status", "Tanggal"], body: komponens.map((k) => { const st = komponenLatest.get(k.id); return [k.nama, SALAT_STATUS[st?.status ?? ""] ?? "Belum Dinilai", st?.status ? formatDateShort(st.tanggal) : "-"]; }) }] : []),
+        ...(cumulativePraktiks.length > 0 ? [{ title: "Riwayat Praktik Salat Lama — Keseluruhan", head: ["Salat", "Status", "Tanggal"], body: jenisSalats.map((j) => { const st = praktikLatest.get(j.id); return [j.nama, SALAT_STATUS[st?.status ?? ""] ?? "Belum Dinilai", st?.status ? formatDateShort(st.tanggal) : "-"]; }) }] : []),
         { title: "Riwayat Kehadiran", head: ["Tanggal", "Status", "Keterangan"], body: presensis.map((r) => [formatDateShort(r.tanggal), formatStatus(r.status), r.keterangan ?? "-"]) },
       ],
     });
@@ -487,25 +521,28 @@ export default function OrangTuaLaporanPage() {
           </section>
 
           <section className="surface-panel p-5 sm:p-6">
-            <SectionHeader title="Praktik Salat" description={`Penilaian terakhir hingga ${formatDate(dateTo)}.`} />
+            <SectionHeader title="Praktik Salat" description={`Gerakan dan niat yang dicatat pada periode ini hingga ${formatDate(dateTo)}.`} />
             <div className="mt-4 space-y-4">
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">A. Komponen Salat</p>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">A. Gerakan Salat</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                        <th className="py-2 pr-3 font-medium">Komponen</th><th className="py-2 pr-3 font-medium">Status</th><th className="py-2 font-medium">Tanggal Penilaian</th>
+                        <th className="py-2 pr-3 font-medium">Tanggal</th><th className="py-2 pr-3 font-medium">Komponen</th><th className="py-2 pr-3 font-medium">Status</th><th className="py-2 font-medium">Catatan</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {komponens.map((k) => {
-                        const st = komponenLatest.get(k.id);
+                      {gerakanSalatKomponens.length === 0 ? (
+                        <tr><td colSpan={4} className="py-4 text-center text-muted-foreground">Belum ada penilaian gerakan salat pada periode ini.</td></tr>
+                      ) : gerakanSalatKomponens.map((detail) => {
+                        const parent = gerakanSalats.find((gerakan) => gerakan.id === detail.perkembangan_gerakan_salat_id);
                         return (
-                          <tr key={k.id} className="border-b border-border/50 last:border-0">
-                            <td className="py-2 pr-3">{k.nama}</td>
-                            <td className="py-2 pr-3">{st?.status ? <Badge variant={SALAT_BADGE[st.status] ?? "secondary"}>{SALAT_STATUS[st.status]}</Badge> : <span className="text-muted-foreground">Belum Dinilai</span>}</td>
-                            <td className="py-2 text-muted-foreground">{st?.status ? formatDateShort(st.tanggal) : "-"}</td>
+                          <tr key={detail.id} className="border-b border-border/50 last:border-0">
+                            <td className="py-2 pr-3 text-muted-foreground">{parent ? formatDateShort(parent.tanggal) : "-"}</td>
+                            <td className="py-2 pr-3">{detail.komponen_salat?.nama ?? "-"}</td>
+                            <td className="py-2 pr-3"><Badge variant={SALAT_BADGE[detail.status] ?? "secondary"}>{SALAT_STATUS[detail.status] ?? detail.status}</Badge></td>
+                            <td className="py-2 text-muted-foreground">{parent?.catatan ?? "-"}</td>
                           </tr>
                         );
                       })}
@@ -514,29 +551,28 @@ export default function OrangTuaLaporanPage() {
                 </div>
               </div>
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">B. Praktik Salat Keseluruhan</p>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">B. Niat Salat</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                        <th className="py-2 pr-3 font-medium">Salat</th><th className="py-2 pr-3 font-medium">Status</th><th className="py-2 font-medium">Tanggal Penilaian</th>
+                        <th className="py-2 pr-3 font-medium">Tanggal</th><th className="py-2 pr-3 font-medium">Jenis Salat</th><th className="py-2 pr-3 font-medium">Status</th><th className="py-2 font-medium">Catatan</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {jenisSalats.map((j) => {
-                        const st = praktikLatest.get(j.id);
-                        return (
-                          <tr key={j.id} className="border-b border-border/50 last:border-0">
-                            <td className="py-2 pr-3">{j.nama}</td>
-                            <td className="py-2 pr-3">{st?.status ? <Badge variant={SALAT_BADGE[st.status] ?? "secondary"}>{SALAT_STATUS[st.status]}</Badge> : <span className="text-muted-foreground">Belum Dinilai</span>}</td>
-                            <td className="py-2 text-muted-foreground">{st?.status ? formatDateShort(st.tanggal) : "-"}</td>
-                          </tr>
-                        );
-                      })}
+                      {niatSalats.length === 0 ? <tr><td colSpan={4} className="py-4 text-center text-muted-foreground">Belum ada penilaian niat salat pada periode ini.</td></tr> : niatSalats.map((r) => (
+                        <tr key={r.id} className="border-b border-border/50 last:border-0">
+                          <td className="py-2 pr-3 text-muted-foreground">{formatDateShort(r.tanggal)}</td>
+                          <td className="py-2 pr-3">{r.jenis_salat?.nama ?? "-"}</td>
+                          <td className="py-2 pr-3"><Badge variant={SALAT_BADGE[r.status] ?? "secondary"}>{SALAT_STATUS[r.status] ?? r.status}</Badge></td>
+                          <td className="py-2 text-muted-foreground">{r.catatan ?? "-"}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </div>
+              {(komponenRows.length > 0 || praktiks.length > 0) && <p className="text-xs text-muted-foreground">Riwayat Praktik Salat versi sebelumnya tetap tersimpan dan tidak digabungkan dengan penilaian Gerakan/Niat baru.</p>}
             </div>
           </section>
 

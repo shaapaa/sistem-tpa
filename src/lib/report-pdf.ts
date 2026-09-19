@@ -74,24 +74,45 @@ export async function createReportPdf({ filename, title, metadata, tables, notes
   doc.setDrawColor(55, 107, 89)
   doc.setLineWidth(0.5)
   doc.line(margin, y, pageWidth - margin, y)
-  y += 9
+  y += 7
+
+  // Ringkasan dokumen: memberi pemisah yang jelas antara kop surat dan isi laporan.
+  doc.setFillColor(237, 247, 241)
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 16, 2, 2, "F")
+  doc.setTextColor(29, 78, 60)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(13)
-  doc.text(title, margin, y)
+  doc.text(title, margin + 5, y + 7)
   doc.setFont("helvetica", "normal")
-  doc.setFontSize(9)
-  metadata.forEach((line) => {
-    y += 5
-    doc.text(line, margin, y)
+  doc.setFontSize(8)
+  doc.text("Rekapitulasi perkembangan santri", margin + 5, y + 12)
+  y += 23
+
+  // Metadata dibaca sebagai blok informasi, bukan paragraf panjang.
+  doc.setTextColor(56, 65, 60)
+  doc.setFillColor(250, 251, 250)
+  const metadataLineHeight = 4.5
+  const metadataHeight = Math.max(18, metadata.length * metadataLineHeight + 7)
+  doc.roundedRect(margin, y, pageWidth - margin * 2, metadataHeight, 2, 2, "F")
+  metadata.forEach((line, index) => {
+    doc.text(line, margin + 5, y + 6 + index * metadataLineHeight)
   })
-  y += 5
+  y += metadataHeight + 8
 
   for (const table of tables) {
     if (table.title) {
+      if (y > doc.internal.pageSize.getHeight() - 35) {
+        doc.addPage()
+        y = 20
+      }
+      doc.setDrawColor(55, 107, 89)
+      doc.setLineWidth(1.2)
+      doc.line(margin, y - 3, margin, y + 3)
       doc.setFont("helvetica", "bold")
       doc.setFontSize(10)
-      doc.text(table.title, margin, y)
-      y += 3
+      doc.setTextColor(32, 65, 51)
+      doc.text(table.title, margin + 3, y)
+      y += 4
     }
     autoTable(doc, {
       head: [table.head],
@@ -101,7 +122,7 @@ export async function createReportPdf({ filename, title, metadata, tables, notes
       pageBreak: "auto",
       showHead: "everyPage",
       theme: "grid",
-      styles: { font: "helvetica", fontSize: 8, cellPadding: 2.5, textColor: [32, 41, 37] },
+      styles: { font: "helvetica", fontSize: 8, cellPadding: 2.5, textColor: [32, 41, 37], valign: "middle" },
       headStyles: { fillColor: [55, 107, 89], textColor: [255, 255, 255], fontStyle: "bold" },
       alternateRowStyles: { fillColor: [247, 246, 240] },
     })
@@ -120,17 +141,27 @@ export async function createReportPdf({ filename, title, metadata, tables, notes
     }
     doc.setFont("helvetica", "bold")
     doc.setFontSize(10)
+    doc.setTextColor(32, 65, 51)
     doc.text(note.title, margin, y)
     y += 6
     doc.setFont("helvetica", "normal")
     doc.setFontSize(9)
+    doc.setTextColor(56, 65, 60)
     doc.text(note.body || "-", margin, y, { maxWidth: pageWidth - margin * 2 })
     y += 10
   })
 
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(8)
-  doc.setTextColor(105, 112, 108)
-  doc.text("Dokumen ini dibuat oleh Sistem Monitoring TPA Baitul Yatama.", margin, doc.internal.pageSize.getHeight() - 10)
+  const totalPages = doc.getNumberOfPages()
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page)
+    doc.setDrawColor(220, 226, 222)
+    doc.setLineWidth(0.2)
+    doc.line(margin, doc.internal.pageSize.getHeight() - 15, pageWidth - margin, doc.internal.pageSize.getHeight() - 15)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(8)
+    doc.setTextColor(105, 112, 108)
+    doc.text("Sistem Monitoring TPA Baitul Yatama", margin, doc.internal.pageSize.getHeight() - 10)
+    doc.text(`Halaman ${page} dari ${totalPages}`, pageWidth - margin, doc.internal.pageSize.getHeight() - 10, { align: "right" })
+  }
   doc.save(filename)
 }

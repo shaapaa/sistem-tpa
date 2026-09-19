@@ -19,6 +19,9 @@ type CicilanRow = { id: string; hafalan_santri_id: string; tanggal: string; ayat
 type DoaRow = { id: string; tanggal: string; status: string | null; doa?: { nama: string } | null }
 type KomponenRow = { id: string; tanggal: string; status: string | null; komponen_salat_id: string }
 type PraktikRow = { id: string; tanggal: string; status: string | null; jenis_salat_id: string }
+type GerakanSalatRow = { id: string; tanggal: string; catatan: string | null }
+type GerakanSalatKomponenRow = { id: string; perkembangan_gerakan_salat_id: string; status: string; komponen_salat?: { nama: string } | null }
+type NiatSalatRow = { id: string; tanggal: string; status: string; catatan: string | null; jenis_salat?: { nama: string } | null }
 type Santri = { id: string; nama: string }
 
 const BAC_STATUS: Record<string, string> = { LANCAR: "Lancar", KURANG_LANCAR: "Kurang Lancar", TIDAK_LANCAR: "Tidak Lancar" }
@@ -42,6 +45,9 @@ export default function PerkembanganPage() {
   const [komponenRows, setKomponenRows] = useState<KomponenRow[]>([]);
   const [jenisSalats, setJenisSalats] = useState<{ id: string; nama: string }[]>([]);
   const [praktiks, setPraktiks] = useState<PraktikRow[]>([]);
+  const [gerakanSalats, setGerakanSalats] = useState<GerakanSalatRow[]>([]);
+  const [gerakanKomponens, setGerakanKomponens] = useState<GerakanSalatKomponenRow[]>([]);
+  const [niatSalats, setNiatSalats] = useState<NiatSalatRow[]>([]);
   const supabase = createClient();
   const activeSantri = santris.find((santri) => santri.id === activeSantriId) ?? null;
 
@@ -80,6 +86,9 @@ export default function PerkembanganPage() {
         setKomponenRows([]);
         setJenisSalats([]);
         setPraktiks([]);
+        setGerakanSalats([]);
+        setGerakanKomponens([]);
+        setNiatSalats([]);
         return;
       }
       setLoading(true);
@@ -90,7 +99,10 @@ export default function PerkembanganPage() {
       setDoas([]);
       setKomponenRows([]);
       setPraktiks([]);
-      const [ba, hs, ci, doa, komM, kom, js, pk] = await Promise.all([
+      setGerakanSalats([]);
+      setGerakanKomponens([]);
+      setNiatSalats([]);
+      const [ba, hs, ci, doa, komM, kom, js, pk, gerakan, niat] = await Promise.all([
         supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, status, catatan, surat(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
         supabase.from("hafalan_santri").select("id, surat_id, surat(nomor, nama, jumlah_ayat)").eq("santri_id", activeSantriId),
         supabase.from("hafalan_surat_cicilan").select("id, hafalan_santri_id, tanggal, ayat_mulai, ayat_selesai, status, hafalan_santri!inner(santri_id)").eq("hafalan_santri.santri_id", activeSantriId),
@@ -99,9 +111,16 @@ export default function PerkembanganPage() {
         supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, komponen_salat_id").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
         supabase.from("jenis_salat").select("id, nama").eq("aktif", true).order("nama"),
         supabase.from("praktik_salat").select("id, tanggal, status, jenis_salat_id").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_gerakan_salat").select("id, tanggal, catatan").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("perkembangan_niat_salat").select("id, tanggal, status, catatan, jenis_salat(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
       ]);
       if (cancelled) return;
-      const perkembanganError = [ba, hs, ci, doa, komM, kom, js, pk].find((result) => result.error)?.error;
+      const gerakanIds = (gerakan.data ?? []).map((item) => item.id);
+      const gerakanKomponen = gerakanIds.length > 0
+        ? await supabase.from("perkembangan_gerakan_salat_komponen").select("id, perkembangan_gerakan_salat_id, status, komponen_salat(nama)").in("perkembangan_gerakan_salat_id", gerakanIds)
+        : { data: [], error: null };
+      if (cancelled) return;
+      const perkembanganError = [ba, hs, ci, doa, komM, kom, js, pk, gerakan, niat, gerakanKomponen].find((result) => result.error)?.error;
       if (perkembanganError) {
         setError("Data perkembangan tidak dapat dimuat. Silakan coba lagi.");
         setLoading(false);
@@ -115,6 +134,9 @@ export default function PerkembanganPage() {
       setKomponenRows((kom.data ?? []) as unknown as KomponenRow[])
       setJenisSalats((js.data ?? []) as { id: string; nama: string }[])
       setPraktiks((pk.data ?? []) as unknown as PraktikRow[])
+      setGerakanSalats((gerakan.data ?? []) as GerakanSalatRow[])
+      setGerakanKomponens((gerakanKomponen.data ?? []) as unknown as GerakanSalatKomponenRow[])
+      setNiatSalats((niat.data ?? []) as unknown as NiatSalatRow[])
       setLoading(false);
     };
     fetchPerkembangan();
@@ -163,6 +185,13 @@ export default function PerkembanganPage() {
   // Komponen salat: status terakhir + tanggal per komponen
   const statusPerKomponen = new Map<string, { status: string; tanggal: string }>();
   komponenRows.forEach((k) => { if (!statusPerKomponen.has(k.komponen_salat_id)) statusPerKomponen.set(k.komponen_salat_id, { status: k.status ?? "", tanggal: k.tanggal }); });
+  const gerakanKomponenBySesi = new Map<string, GerakanSalatKomponenRow[]>();
+  gerakanKomponens.forEach((komponen) => {
+    const rows = gerakanKomponenBySesi.get(komponen.perkembangan_gerakan_salat_id) ?? [];
+    rows.push(komponen);
+    gerakanKomponenBySesi.set(komponen.perkembangan_gerakan_salat_id, rows);
+  });
+  const hasLegacySalat = komponenRows.length > 0 || praktiks.length > 0;
 
   return (
     <div className="space-y-6">
@@ -290,44 +319,105 @@ export default function PerkembanganPage() {
         <TabsContent value="salat" className="pt-4">
           <div className="space-y-4">
             <Card className="card-elevated">
-              <CardHeader><CardTitle className="text-sm font-medium">Komponen Salat</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm font-medium">Gerakan Salat</CardTitle></CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {komponens.map((k) => {
-                    const st = statusPerKomponen.get(k.id);
-                    return (
-                      <div key={k.id} className="rounded-lg border border-border p-3 text-center">
-                        <p className="font-medium text-foreground">{k.nama}</p>
-                        <p className="mt-1 text-sm">
-                          {st?.status ? <Badge variant={SALAT_BADGE[st.status] ?? "secondary"}>{SALAT_STATUS[st.status] ?? st.status}</Badge> : <span className="text-muted-foreground">-</span>}
-                        </p>
-                        {st?.status && <p className="mt-1 text-xs text-muted-foreground">{formatDateShort(st.tanggal)}</p>}
-                      </div>
-                    );
-                  })}
-                </div>
+                {gerakanSalats.length === 0 ? <EmptyState message="Belum ada penilaian gerakan salat" hint="Penilaian delapan gerakan salat anak akan tampil di sini." /> : (
+                  <div className="space-y-4">
+                    {gerakanSalats.map((gerakan) => {
+                      const detail = gerakanKomponenBySesi.get(gerakan.id) ?? [];
+                      return (
+                        <div key={gerakan.id} className="rounded-lg border border-border p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-medium text-foreground">Penilaian gerakan</p>
+                            <span className="text-xs text-muted-foreground">{formatDateShort(gerakan.tanggal)}</span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {detail.map((komponen) => (
+                              <div key={komponen.id} className="flex items-center justify-between gap-3 rounded-md bg-muted/30 px-3 py-2 text-sm">
+                                <span className="font-medium text-foreground">{komponen.komponen_salat?.nama ?? "Komponen salat"}</span>
+                                <Badge variant={SALAT_BADGE[komponen.status] ?? "secondary"}>{SALAT_STATUS[komponen.status] ?? komponen.status}</Badge>
+                              </div>
+                            ))}
+                          </div>
+                          {gerakan.catatan && <p className="mt-3 border-t border-border/70 pt-3 text-sm italic text-muted-foreground">&quot;{gerakan.catatan}&quot;</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             <Card className="card-elevated">
-              <CardHeader><CardTitle className="text-sm font-medium">Praktik Salat Keseluruhan</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm font-medium">Niat Salat</CardTitle></CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                  {jenisSalats.map((j) => {
-                    const st = statusPerJenis.get(j.id);
-                    return (
-                      <div key={j.id} className="rounded-lg border border-border p-3 text-center">
-                        <p className="font-medium text-foreground">{j.nama}</p>
-                        <p className="mt-1 text-sm">
-                          {st?.status ? <Badge variant={SALAT_BADGE[st.status] ?? "secondary"}>{SALAT_STATUS[st.status] ?? st.status}</Badge> : <span className="text-muted-foreground">Belum Dinilai</span>}
-                        </p>
-                        {st?.status && <p className="mt-1 text-xs text-muted-foreground">{formatDateShort(st.tanggal)}</p>}
+                {niatSalats.length === 0 ? <EmptyState message="Belum ada penilaian niat salat" hint="Riwayat penilaian niat salat anak akan tampil di sini." /> : (
+                  <div className="space-y-2">
+                    {niatSalats.map((niat) => (
+                      <div key={niat.id} className="rounded-lg border border-border px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-medium text-foreground">{niat.jenis_salat?.nama ?? "Jenis salat"}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">{formatDateShort(niat.tanggal)}</span>
+                            <Badge variant={SALAT_BADGE[niat.status] ?? "secondary"}>{SALAT_STATUS[niat.status] ?? niat.status}</Badge>
+                          </div>
+                        </div>
+                        {niat.catatan && <p className="mt-2 text-sm italic text-muted-foreground">&quot;{niat.catatan}&quot;</p>}
                       </div>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {hasLegacySalat && (
+              <Card className="card-elevated">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Riwayat Praktik Salat Sebelumnya</CardTitle>
+                  <p className="text-sm text-muted-foreground">Data sebelum pembaruan sistem tetap disimpan sebagai riwayat legacy.</p>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {komponenRows.length > 0 && (
+                    <div>
+                      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Komponen Salat</p>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {komponens.map((komponen) => {
+                          const status = statusPerKomponen.get(komponen.id);
+                          return (
+                            <div key={komponen.id} className="rounded-lg border border-border p-3 text-center">
+                              <p className="font-medium text-foreground">{komponen.nama}</p>
+                              <p className="mt-1 text-sm">{status?.status ? <Badge variant={SALAT_BADGE[status.status] ?? "secondary"}>{SALAT_STATUS[status.status] ?? status.status}</Badge> : <span className="text-muted-foreground">-</span>}</p>
+                              {status?.status && <p className="mt-1 text-xs text-muted-foreground">{formatDateShort(status.tanggal)}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {praktiks.length > 0 && (
+                    <div>
+                      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Penilaian Keseluruhan</p>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                        {jenisSalats.map((jenis) => {
+                          const status = statusPerJenis.get(jenis.id);
+                          return (
+                            <div key={jenis.id} className="rounded-lg border border-border p-3 text-center">
+                              <p className="font-medium text-foreground">{jenis.nama}</p>
+                              <p className="mt-1 text-sm">{status?.status ? <Badge variant={SALAT_BADGE[status.status] ?? "secondary"}>{SALAT_STATUS[status.status] ?? status.status}</Badge> : <span className="text-muted-foreground">Belum Dinilai</span>}</p>
+                              {status?.status && <p className="mt-1 text-xs text-muted-foreground">{formatDateShort(status.tanggal)}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {!hasLegacySalat && gerakanSalats.length === 0 && niatSalats.length === 0 && (
+              <EmptyState message="Belum ada riwayat praktik salat" hint="Penilaian gerakan dan niat salat anak akan tampil di sini." />
+            )}
           </div>
         </TabsContent>
       </Tabs>
