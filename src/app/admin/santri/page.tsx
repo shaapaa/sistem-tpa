@@ -305,7 +305,7 @@ export default function SantriPage() {
               </div>
               <div className="space-y-2">
                 <Label>Tanggal Lahir</Label>
-                <DatePicker value={form.tanggal_lahir} onChange={(value) => setForm({ ...form, tanggal_lahir: value })} />
+                <DatePicker value={form.tanggal_lahir} onChange={(value) => setForm({ ...form, tanggal_lahir: value })} fromYear={1940} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

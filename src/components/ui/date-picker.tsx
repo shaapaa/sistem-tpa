@@ -11,21 +11,32 @@ interface DatePickerProps {
   onChange: (value: string) => void
   placeholder?: string
   disabled?: boolean
+  fromYear?: number
+  toYear?: number
 }
 
 const monthNames = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" })
+const monthOptions = Array.from({ length: 12 }, (_, index) => ({
+  value: index,
+  label: new Intl.DateTimeFormat("id-ID", { month: "long" }).format(new Date(2026, index, 1)),
+}))
 const weekdays = ["Mg", "Sn", "Sl", "Rb", "Km", "Jm", "Sb"]
 
 function isoDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
-export function DatePicker({ value, onChange, placeholder = "Pilih tanggal", disabled }: DatePickerProps) {
+export function DatePicker({ value, onChange, placeholder = "Pilih tanggal", disabled, fromYear, toYear }: DatePickerProps) {
   const initial = value ? new Date(`${value}T00:00:00`) : new Date()
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [month, setMonth] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1))
+  const years = useMemo(() => {
+    if (fromYear === undefined) return []
+    const lastYear = toYear ?? new Date().getFullYear()
+    return Array.from({ length: Math.max(0, lastYear - fromYear + 1) }, (_, index) => lastYear - index)
+  }, [fromYear, toYear])
   const days = useMemo(() => {
     const firstDay = new Date(month.getFullYear(), month.getMonth(), 1).getDay()
     const count = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()
@@ -72,7 +83,26 @@ export function DatePicker({ value, onChange, placeholder = "Pilih tanggal", dis
             <div className="w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg">
               <div className="flex items-center justify-between">
                 <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronLeft className="h-4 w-4" /></Button>
-                <p className="text-sm font-medium capitalize">{monthNames.format(month)}</p>
+                {years.length > 0 ? (
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      aria-label="Pilih bulan"
+                      value={month.getMonth()}
+                      onChange={(event) => setMonth(new Date(month.getFullYear(), Number(event.target.value), 1))}
+                      className="h-8 min-w-0 rounded-md border border-input bg-background px-1.5 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {monthOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select
+                      aria-label="Pilih tahun"
+                      value={month.getFullYear()}
+                      onChange={(event) => setMonth(new Date(Number(event.target.value), month.getMonth(), 1))}
+                      className="h-8 rounded-md border border-input bg-background px-1.5 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {years.map((year) => <option key={year} value={year}>{year}</option>)}
+                    </select>
+                  </div>
+                ) : <p className="text-sm font-medium capitalize">{monthNames.format(month)}</p>}
                 <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><ChevronRight className="h-4 w-4" /></Button>
               </div>
               <div className="mt-2 grid grid-cols-7 text-center text-[10px] font-medium text-muted-foreground">
