@@ -36,7 +36,7 @@ const HARI_LABEL: Record<string, string> = {
   KAMIS: "Kamis", JUMAT: "Jumat",
 };
 const SESI_JAM: Record<string, { jam_mulai: string; jam_selesai: string }> = {
-  PAGI: { jam_mulai: "07:30", jam_selesai: "10:00" },
+  PAGI: { jam_mulai: "08:00", jam_selesai: "09:30" },
   SORE: { jam_mulai: "16:00", jam_selesai: "17:30" },
 };
 
@@ -51,9 +51,10 @@ export default function JadwalPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Jadwal | null>(null);
-  const [form, setForm] = useState({ kelompok_id: "", hari: "", jam_mulai: "07:30", jam_selesai: "10:00" });
+  const [form, setForm] = useState({ kelompok_id: "", hari: "", jam_mulai: "08:00", jam_selesai: "09:30" });
   const [confirmDel, setConfirmDel] = useState<Jadwal | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [saving, setSaving] = useState(false);
   const supabase = createClient();
 
   const fetchData = async () => {
@@ -80,7 +81,7 @@ export default function JadwalPage() {
 
   const openAdd = (hari?: string) => {
     setEditing(null);
-    setForm({ kelompok_id: "", hari: hari ?? "", jam_mulai: "07:30", jam_selesai: "10:00" });
+    setForm({ kelompok_id: "", hari: hari ?? "", jam_mulai: "08:00", jam_selesai: "09:30" });
     setDialogOpen(true);
   };
 
@@ -91,15 +92,24 @@ export default function JadwalPage() {
   };
 
   const handleSave = async () => {
+    if (saving) return
     if (!form.kelompok_id || !form.hari) {
       setErrorMsg("Kelompok dan hari wajib diisi")
       return
     }
+    const sesi = kelompoks.find((kelompok) => kelompok.id === form.kelompok_id)?.sesi?.nama
+    const jamSesi = sesi ? SESI_JAM[sesi] : null
+    if (!jamSesi) {
+      setErrorMsg("Sesi kelompok tidak valid")
+      return
+    }
+    setSaving(true)
+    try {
     const payload = {
       kelompok_id: form.kelompok_id,
       hari: form.hari,
-      jam_mulai: form.jam_mulai,
-      jam_selesai: form.jam_selesai,
+      jam_mulai: jamSesi.jam_mulai,
+      jam_selesai: jamSesi.jam_selesai,
     };
     if (editing) {
       const { error } = await supabase.from("jadwal").update(payload).eq("id", editing.id)
@@ -114,7 +124,10 @@ export default function JadwalPage() {
       }
     }
     setDialogOpen(false);
-    fetchData();
+    await fetchData();
+    } finally {
+      setSaving(false)
+    }
   };
 
   const handleDelete = async () => {
@@ -232,18 +245,18 @@ export default function JadwalPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Jam Mulai</Label>
-                <Input type="time" value={form.jam_mulai} onChange={(e) => setForm({ ...form, jam_mulai: e.target.value })} className="h-9" />
+                <Input type="time" value={form.jam_mulai} className="h-9" disabled />
               </div>
               <div className="space-y-2">
                 <Label>Jam Selesai</Label>
-                <Input type="time" value={form.jam_selesai} onChange={(e) => setForm({ ...form, jam_selesai: e.target.value })} className="h-9" />
+                <Input type="time" value={form.jam_selesai} className="h-9" disabled />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">Jam otomatis mengikuti sesi kelompok (Pagi 07:30-10:00 · Sore 16:00-17:30), dapat diubah.</p>
+            <p className="text-xs text-muted-foreground">Jam mengikuti sesi kelompok: Pagi 08.00–09.30 · Sore 16.00–17.30.</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="h-9">Batal</Button>
-            <Button onClick={handleSave} className="h-9">{editing ? "Simpan Perubahan" : "Tambah Jadwal"}</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving} className="h-9">Batal</Button>
+            <Button onClick={handleSave} disabled={saving} className="h-9">{saving ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Tambah Jadwal"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

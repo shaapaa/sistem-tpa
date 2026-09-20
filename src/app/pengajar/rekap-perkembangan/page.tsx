@@ -34,6 +34,8 @@ type CicilanRow = { id: string; tanggal: string; ayat_mulai: number | null; ayat
 type DoaRow = { id: string; tanggal: string; santri_id: string; status: string | null; catatan: string | null; doa?: { nama: string } | null }
 type KomponenRow = { id: string; tanggal: string; santri_id: string; status: string | null; catatan: string | null; komponen_salat?: { nama: string } | null }
 type PraktikRow = { id: string; tanggal: string; santri_id: string; status: string | null; catatan: string | null; jenis_salat?: { nama: string } | null }
+type GerakanSalatRow = { id: string; tanggal: string; santri_id: string; catatan: string | null }
+type NiatSalatRow = { id: string; tanggal: string; santri_id: string; status: string; catatan: string | null; jenis_salat?: { nama: string } | null }
 
 function statusLabel(s: string | null): string {
   if (!s) return "-"
@@ -100,12 +102,14 @@ export default function RekapPerkembanganPage() {
 
       const build = (tipe: string) => (id: string, tanggal: string, santri_id: string, detail: string, status: string | null, catatan: string | null): Item => ({ id, tanggal, tipe, santri_id, detail, status, catatan })
 
-      const [bacaan, cicilan, doa, komponen, praktik] = await Promise.all([
+      const [bacaan, cicilan, doa, komponen, praktik, gerakan, niat] = await Promise.all([
         supabase.from("perkembangan_bacaan").select("id, tanggal, santri_id, jenis_bacaan, jilid, halaman, surat_id, juz, status, catatan, surat(nama)").in("santri_id", santriIds),
         supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri(santri_id, surat(nama))").in("hafalan_santri.santri_id", santriIds),
         supabase.from("perkembangan_hafalan_doa").select("id, tanggal, santri_id, status, catatan, doa(nama)").in("santri_id", santriIds),
         supabase.from("perkembangan_salat_komponen").select("id, tanggal, santri_id, status, catatan, komponen_salat(nama)").in("santri_id", santriIds),
         supabase.from("praktik_salat").select("id, tanggal, santri_id, status, catatan, jenis_salat(nama)").in("santri_id", santriIds),
+        supabase.from("perkembangan_gerakan_salat").select("id, tanggal, santri_id, catatan").in("santri_id", santriIds),
+        supabase.from("perkembangan_niat_salat").select("id, tanggal, santri_id, status, catatan, jenis_salat(nama)").in("santri_id", santriIds),
       ])
 
       const list: Item[] = []
@@ -121,6 +125,8 @@ export default function RekapPerkembanganPage() {
       ;((doa.data ?? []) as unknown as DoaRow[]).forEach((r) => list.push(build("HAFALAN DOA")(r.id, r.tanggal, r.santri_id, r.doa?.nama ?? "-", r.status, r.catatan)))
       ;((komponen.data ?? []) as unknown as KomponenRow[]).forEach((r) => list.push(build("SALAT KOMPONEN")(r.id, r.tanggal, r.santri_id, r.komponen_salat?.nama ?? "-", r.status, r.catatan)))
       ;((praktik.data ?? []) as unknown as PraktikRow[]).forEach((r) => list.push(build("PRAKTIK SALAT")(r.id, r.tanggal, r.santri_id, r.jenis_salat?.nama ?? "-", r.status, r.catatan)))
+      ;((gerakan.data ?? []) as unknown as GerakanSalatRow[]).forEach((r) => list.push(build("GERAKAN SALAT")(r.id, r.tanggal, r.santri_id, "Penilaian delapan komponen", null, r.catatan)))
+      ;((niat.data ?? []) as unknown as NiatSalatRow[]).forEach((r) => list.push(build("NIAT SALAT")(r.id, r.tanggal, r.santri_id, r.jenis_salat?.nama ?? "-", r.status, r.catatan)))
 
       const filtered = list.filter((it) => {
         if (selectedSantri && selectedSantri !== "ALL" && it.santri_id !== selectedSantri) return false
@@ -159,13 +165,15 @@ export default function RekapPerkembanganPage() {
         </div>
         <div className="space-y-2">
           <Label>Tipe</Label>
-          <Select value={filterTipe} onValueChange={(v) => v && setFilterTipe(v)} items={[{ label: "Semua", value: "ALL" }, { label: "Bacaan", value: "BACAAN" }, { label: "Hafalan Surat", value: "HAFALAN SURAT" }, { label: "Hafalan Doa", value: "HAFALAN DOA" }, { label: "Salat Komponen", value: "SALAT KOMPONEN" }, { label: "Praktik Salat", value: "PRAKTIK SALAT" }]}>
+          <Select value={filterTipe} onValueChange={(v) => v && setFilterTipe(v)} items={[{ label: "Semua", value: "ALL" }, { label: "Bacaan", value: "BACAAN" }, { label: "Hafalan Surat", value: "HAFALAN SURAT" }, { label: "Hafalan Doa", value: "HAFALAN DOA" }, { label: "Gerakan Salat", value: "GERAKAN SALAT" }, { label: "Niat Salat", value: "NIAT SALAT" }, { label: "Salat Komponen", value: "SALAT KOMPONEN" }, { label: "Praktik Salat", value: "PRAKTIK SALAT" }]}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Semua</SelectItem>
               <SelectItem value="BACAAN">Bacaan</SelectItem>
               <SelectItem value="HAFALAN SURAT">Hafalan Surat</SelectItem>
               <SelectItem value="HAFALAN DOA">Hafalan Doa</SelectItem>
+              <SelectItem value="GERAKAN SALAT">Gerakan Salat</SelectItem>
+              <SelectItem value="NIAT SALAT">Niat Salat</SelectItem>
               <SelectItem value="SALAT KOMPONEN">Salat Komponen</SelectItem>
               <SelectItem value="PRAKTIK SALAT">Praktik Salat</SelectItem>
             </SelectContent>

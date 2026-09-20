@@ -41,6 +41,7 @@ export default function KelompokPage() {
   const [editing, setEditing] = useState<Kelompok | null>(null)
   const [confirmDel, setConfirmDel] = useState<Kelompok | null>(null)
   const [errorMsg, setErrorMsg] = useState("")
+  const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ sesi_id: "", nama: "A", pengajar_id: "" })
   const supabase = createClient()
 
@@ -71,10 +72,13 @@ export default function KelompokPage() {
   }
 
   const handleSave = async () => {
+    if (saving) return
     if (!form.sesi_id) {
       setErrorMsg("Pilih sesi")
       return
     }
+    setSaving(true)
+    try {
     const payload = {
       sesi_id: form.sesi_id,
       nama: form.nama,
@@ -93,7 +97,10 @@ export default function KelompokPage() {
       }
     }
     setDialogOpen(false)
-    fetchData()
+    await fetchData()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDelete = async () => {
@@ -195,8 +202,8 @@ export default function KelompokPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="h-9">Batal</Button>
-            <Button onClick={handleSave} className="h-9">{editing ? "Simpan Perubahan" : "Tambah Kelompok"}</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving} className="h-9">Batal</Button>
+            <Button onClick={handleSave} disabled={saving} className="h-9">{saving ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Tambah Kelompok"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Download, FileText, CalendarDays, BookMarked, Moon, CalendarCheck, Activity, CalendarX, UserX, TrendingUp } from "lucide-react";
 import { formatDate, formatDateShort, formatStatus, getStatusBadgeVariant } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
+import { todayJakarta } from "@/lib/islamic-date";
 import { SectionHeader } from "@/components/layout/section-header";
 import { StatCard } from "@/components/layout/stat-card";
 import { EmptyState } from "@/components/layout/empty-state";
@@ -224,7 +225,7 @@ export default function LaporanPage() {
     if (!santri || noData) return;
     const periode = `${formatDate(dateFrom)} – ${formatDate(dateTo)}`;
     await createReportPdf({
-      filename: `laporan-perkembangan-${santri.nama.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.pdf`,
+      filename: `laporan-perkembangan-${santri.nama.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${todayJakarta()}.pdf`,
       title: "Laporan Perkembangan Santri",
       metadata: [
         `Nama: ${santri.nama}`,

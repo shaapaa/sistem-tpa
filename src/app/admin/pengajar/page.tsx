@@ -42,19 +42,6 @@ export default function PengajarPage() {
   })
   const supabase = createClient()
 
-  const adminAuth = async (action: string, data?: Record<string, unknown>) => {
-    const isDelete = action === "delete"
-    const url = isDelete && data?.id ? `/api/admin/auth?id=${encodeURIComponent(String(data.id))}` : "/api/admin/auth"
-    const res = await fetch(url, {
-      method: isDelete ? "DELETE" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...data }),
-    })
-    const json = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(json.message || "Operasi gagal")
-    return json
-  }
-
   const fetchData = async () => {
     const [data, kel] = await Promise.all([
       supabase.from("pengajar").select("*, profiles(id, nama, role)").order("nama"),
@@ -127,15 +114,10 @@ export default function PengajarPage() {
     const p = confirmDel
     setConfirmDel(null)
 
-    const profileId = p.profiles?.id
-    await supabase.from("pengajar").delete().eq("id", p.id)
-    if (profileId) {
-      await supabase.from("profiles").delete().eq("id", profileId)
-      try {
-        await adminAuth("delete", { id: profileId })
-      } catch (err) {
-        setErrorMsg((err as Error).message)
-      }
+    const { error } = await supabase.from("pengajar").delete().eq("id", p.id)
+    if (error) {
+      setErrorMsg(error.message)
+      return
     }
     fetchData()
   }
@@ -147,7 +129,7 @@ export default function PengajarPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Manajemen Data" title="Pengajar" description="Kelola data pengajar dan akun login mereka." action={<Button onClick={openAdd} className="h-9 px-4">
+      <PageHeader eyebrow="Manajemen Data" title="Pengajar" description="Kelola master Pengajar dan penugasannya ke kelompok." action={<Button onClick={openAdd} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Pengajar
         </Button>} />
 
@@ -259,7 +241,7 @@ export default function PengajarPage() {
               <Input value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} className="h-9" placeholder="Alamat (opsional)" autoComplete="off" />
             </div>
             <p className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
-              Akun login (email & password) pengajar dibuat terpisah di menu <strong className="font-medium text-foreground">Profil &amp; Akun</strong>.
+              Akun login dibuat sendiri oleh Pengajar melalui halaman pendaftaran. Admin hanya mengelola master Pengajar dan penugasannya ke kelompok.
             </p>
           </div>
           <DialogFooter>
@@ -273,7 +255,7 @@ export default function PengajarPage() {
         open={!!confirmDel}
         onOpenChange={(o) => !o && setConfirmDel(null)}
         title="Hapus Pengajar"
-        message={`Hapus pengajar ${confirmDel?.nama} beserta akun loginnya?`}
+        message={`Hapus master Pengajar ${confirmDel?.nama}? Akun login yang sudah terdaftar tidak dihapus.`}
         confirmLabel="Hapus"
         cancelLabel="Batal"
         variant="destructive"

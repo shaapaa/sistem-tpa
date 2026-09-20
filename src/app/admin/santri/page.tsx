@@ -60,6 +60,7 @@ export default function SantriPage() {
   const [statusFilter, setStatusFilter] = useState("ALL")
   const [confirmDel, setConfirmDel] = useState<Santri | null>(null)
   const [errorMsg, setErrorMsg] = useState("")
+  const [saving, setSaving] = useState(false)
   const [detail, setDetail] = useState<Santri | null>(null)
   const [form, setForm] = useState({
     nama: "",
@@ -136,6 +137,7 @@ export default function SantriPage() {
   }
 
   const handleSave = async () => {
+    if (saving) return
     if (!form.nama) {
       setErrorMsg("Nama lengkap wajib diisi")
       return
@@ -144,9 +146,15 @@ export default function SantriPage() {
       setErrorMsg("Sesi dan jenis bacaan wajib diisi")
       return
     }
+    setSaving(true)
+    try {
     const sesiId = sesis.find((s) => s.nama === form.sesi)?.id
     if (!sesiId) {
       setErrorMsg("Sesi tidak ditemukan")
+      return
+    }
+    if (form.keterangan !== "IQRA" && form.keterangan !== "QURAN") {
+      setErrorMsg("Jenis bacaan harus Iqra atau Al-Quran")
       return
     }
     const namaKel = form.keterangan === "IQRA" ? "A" : "B"
@@ -187,14 +195,17 @@ export default function SantriPage() {
     }
 
     setDialogOpen(false)
-    fetchData()
+    await fetchData()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDelete = async () => {
     if (!confirmDel) return
     const id = confirmDel.id
     setConfirmDel(null)
-    const { error } = await supabase.from("santri").delete().eq("id", id)
+    const { error } = await supabase.from("santri").update({ is_active: false }).eq("id", id)
     if (error) { setErrorMsg(error.message); return }
     fetchData()
   }
@@ -376,8 +387,8 @@ export default function SantriPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="h-9">Batal</Button>
-            <Button onClick={handleSave} className="h-9">{editing ? "Simpan Perubahan" : "Tambah Santri"}</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving} className="h-9">Batal</Button>
+            <Button onClick={handleSave} disabled={saving} className="h-9">{saving ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Tambah Santri"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -423,9 +434,9 @@ export default function SantriPage() {
       <ConfirmDialog
         open={!!confirmDel}
         onOpenChange={(o) => !o && setConfirmDel(null)}
-        title="Hapus Santri"
-        message={`Hapus santri ${confirmDel?.nama}?`}
-        confirmLabel="Hapus"
+        title="Nonaktifkan Santri"
+        message={`Nonaktifkan ${confirmDel?.nama}? Riwayat perkembangan tetap disimpan dan santri dapat diaktifkan kembali melalui menu Edit.`}
+        confirmLabel="Nonaktifkan"
         cancelLabel="Batal"
         variant="destructive"
         onConfirm={handleDelete}

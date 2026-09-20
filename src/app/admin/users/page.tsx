@@ -42,6 +42,7 @@ export default function UsersPage() {
   const [search, setSearch] = useState("")
   const [confirmDel, setConfirmDel] = useState<Profile | null>(null)
   const [errorMsg, setErrorMsg] = useState("")
+  const [saving, setSaving] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [form, setForm] = useState({
     nama: "",
@@ -85,7 +86,7 @@ export default function UsersPage() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ nama: "", role: "PENGAJAR", password: "", santri_ids: [], pengajar_id: "", is_active: true })
+    setForm({ nama: "", role: "ADMIN", password: "", santri_ids: [], pengajar_id: "", is_active: true })
     setDialogOpen(true)
   }
 
@@ -103,6 +104,7 @@ export default function UsersPage() {
   }
 
   const handleSave = async () => {
+    if (saving) return
     if (!form.nama || (!editing && !form.password)) {
       setErrorMsg("Nama dan password wajib diisi")
       return
@@ -112,15 +114,18 @@ export default function UsersPage() {
       return
     }
 
-    if (form.role === "SANTRI" && form.santri_ids.length === 0) {
+    const role = editing?.role ?? "ADMIN"
+    if (role === "SANTRI" && form.santri_ids.length === 0) {
       setErrorMsg("Pilih santri untuk akun santri")
       return
     }
-    if (form.role === "PENGAJAR" && !form.pengajar_id) {
+    if (role === "PENGAJAR" && !form.pengajar_id) {
       setErrorMsg("Pilih pengajar untuk akun pengajar")
       return
     }
 
+    setSaving(true)
+    try {
     if (editing) {
       if (editing.id === user?.id && (form.role !== "ADMIN" || !form.is_active)) {
         setErrorMsg("Admin yang sedang digunakan tidak dapat diubah role atau dinonaktifkan")
@@ -131,7 +136,7 @@ export default function UsersPage() {
         setErrorMsg("Minimal harus ada satu akun admin aktif")
         return
       }
-      const { error: profErr } = await supabase.from("profiles").update({ nama: form.nama, role: form.role, is_active: form.is_active }).eq("id", editing.id)
+      const { error: profErr } = await supabase.from("profiles").update({ nama: form.nama, role, is_active: form.is_active }).eq("id", editing.id)
       if (profErr) { setErrorMsg(profErr.message); return }
       if (form.password) {
         try {
@@ -142,7 +147,7 @@ export default function UsersPage() {
         }
       }
       // Kelola relasi wali -> santri (role SANTRI)
-      if (form.role !== "SANTRI") {
+      if (role !== "SANTRI") {
         const { error } = await supabase.from("wali_santri").delete().eq("profile_id", editing.id)
         if (error) { setErrorMsg(error.message); return }
       } else {
@@ -159,7 +164,7 @@ export default function UsersPage() {
         }
       }
       // Kelola relasi pengajar -> profile (role PENGAJAR)
-      if (form.role !== "PENGAJAR") {
+      if (role !== "PENGAJAR") {
         const { error } = await supabase.from("pengajar").update({ profile_id: null }).eq("profile_id", editing.id)
         if (error) { setErrorMsg(error.message); return }
       } else {
@@ -180,7 +185,7 @@ export default function UsersPage() {
         setErrorMsg((err as Error).message)
         return
       }
-      const { error: profInsertErr } = await supabase.from("profiles").insert({ id: authId, nama: form.nama, role: form.role, is_active: form.is_active })
+      const { error: profInsertErr } = await supabase.from("profiles").insert({ id: authId, nama: form.nama, role, is_active: form.is_active })
       if (profInsertErr) {
         await adminAuth("delete", { id: authId })
         setErrorMsg(profInsertErr.message.includes("duplicate") || profInsertErr.message.includes("unique")
@@ -188,7 +193,7 @@ export default function UsersPage() {
           : profInsertErr.message)
         return
       }
-      if (form.role === "SANTRI" && form.santri_ids.length > 0) {
+      if (role === "SANTRI" && form.santri_ids.length > 0) {
         const { error: linkErr } = await supabase.from("wali_santri").insert(form.santri_ids.map((santri_id) => ({ profile_id: authId, santri_id })))
         if (linkErr) {
           await supabase.from("profiles").delete().eq("id", authId)
@@ -197,7 +202,7 @@ export default function UsersPage() {
           return
         }
       }
-      if (form.role === "PENGAJAR" && form.pengajar_id) {
+      if (role === "PENGAJAR" && form.pengajar_id) {
         const { error: linkErr } = await supabase.from("pengajar").update({ profile_id: authId }).eq("id", form.pengajar_id)
         if (linkErr) {
           await supabase.from("profiles").delete().eq("id", authId)
@@ -210,7 +215,10 @@ export default function UsersPage() {
 
     setShowPassword(false)
     setDialogOpen(false)
-    fetchData()
+    await fetchData()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDelete = async () => {
@@ -247,8 +255,8 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Akses sistem" title="Profil & Akun" description="Kelola akun masuk, peran, dan hubungan ke pengajar/santri." action={<Button onClick={openAdd} className="h-9 px-4">
-          <Plus className="mr-2 h-4 w-4" /> Tambah Akun
+      <PageHeader eyebrow="Akses sistem" title="Profil & Akun" description="Lihat akun sistem dan kelola status aksesnya." action={<Button onClick={openAdd} className="h-9 px-4">
+          <Plus className="mr-2 h-4 w-4" /> Tambah Admin
         </Button>} />
 
       <FilterBar><div className="relative w-full sm:max-w-sm">
@@ -262,7 +270,7 @@ export default function UsersPage() {
       </div>
       </FilterBar>
 
-      <Card className="surface-panel overflow-hidden">
+      <Card className="surface-panel overflow-x-auto">
         {loading ? (
           <div className="p-4">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -270,7 +278,7 @@ export default function UsersPage() {
             ))}
           </div>
         ) : (
-          <Table>
+          <Table className="min-w-[44rem]">
             <TableHeader>
               <TableRow>
                 <TableHead>Nama</TableHead>
@@ -340,14 +348,8 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={form.role} onValueChange={(v: string | null) => v && setForm({ ...form, role: v, santri_ids: [], pengajar_id: "" })} items={[{ label: "Admin", value: "ADMIN" }, { label: "Pengajar", value: "PENGAJAR" }, { label: "Santri", value: "SANTRI" }]} disabled={editing?.id === user?.id}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ADMIN">Admin</SelectItem>
-                  <SelectItem value="PENGAJAR">Pengajar</SelectItem>
-                  <SelectItem value="SANTRI">Santri</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">{editing ? formatRole(editing.role) : "Admin"}</div>
+              {!editing && <p className="text-xs text-muted-foreground">Akun Pengajar dan Orang Tua dibuat melalui pendaftaran mandiri.</p>}
             </div>
             {form.role === "SANTRI" && (
               <div className="space-y-2">
@@ -425,8 +427,8 @@ export default function UsersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="h-9">Batal</Button>
-            <Button onClick={handleSave} className="h-9">{editing ? "Simpan Perubahan" : "Tambah Akun"}</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving} className="h-9">Batal</Button>
+            <Button onClick={handleSave} disabled={saving} className="h-9">{saving ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Tambah Akun"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

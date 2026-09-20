@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, BookOpen, BookMarked, Moon, CheckCircle, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { todayJakarta } from "@/lib/islamic-date";
 
 interface Santri { id: string; nama: string; kelompok_id: string | null }
 interface Kelompok { id: string; nama: string }
@@ -372,7 +373,7 @@ export default function PerkembanganPage() {
     resetPraktikSalatForm()
   }
 
-  const today = new Date().toISOString().split("T")[0]
+  const today = todayJakarta()
 
   const handleSaveBacaan = async () => {
     if (!selectedSantri || !user) return

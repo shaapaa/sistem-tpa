@@ -23,6 +23,8 @@ type DoaRow = { id: string; tanggal: string; status: string | null; catatan: str
 type BacaanRow = { id: string; tanggal: string; jenis_bacaan: string | null; jilid: number | null; halaman: number | null; juz: number | null; status: string | null; catatan: string | null; surat?: { nama: string } | null }
 type PraktikRow = { id: string; tanggal: string; status: string | null; catatan: string | null; jenis_salat?: { nama: string } | null }
 type KomponenRow = { id: string; tanggal: string; status: string | null; catatan: string | null; komponen_salat?: { nama: string } | null }
+type NiatSalatRow = { id: string; tanggal: string; status: string; catatan: string | null; jenis_salat?: { nama: string } | null }
+type GerakanSalatRow = { id: string; tanggal: string; catatan: string | null }
 type Santri = { id: string; nama: string; kelompok?: { nama: string; sesi?: { nama: string } | null; pengajar?: { nama: string } | null } | null }
 
 const STATUS_BADGE: Record<string, "success" | "warning" | "destructive"> = {
@@ -49,6 +51,8 @@ export default function OrangTuaDashboard() {
   const [bacaans, setBacaans] = useState<BacaanRow[]>([]);
   const [praktiks, setPraktiks] = useState<PraktikRow[]>([]);
   const [komponens, setKomponens] = useState<KomponenRow[]>([]);
+  const [niatSalats, setNiatSalats] = useState<NiatSalatRow[]>([]);
+  const [gerakanSalats, setGerakanSalats] = useState<GerakanSalatRow[]>([]);
   const [totalDoaMaster, setTotalDoaMaster] = useState(0);
   const [jenisSalats, setJenisSalats] = useState<string[]>([]);
   const [period, setPeriod] = useState("month");
@@ -100,6 +104,8 @@ export default function OrangTuaDashboard() {
         setBacaans([]);
         setPraktiks([]);
         setKomponens([]);
+        setNiatSalats([]);
+        setGerakanSalats([]);
         setTotalDoaMaster(0);
         setJenisSalats([]);
         return;
@@ -112,18 +118,22 @@ export default function OrangTuaDashboard() {
       setBacaans([]);
       setPraktiks([]);
       setKomponens([]);
-      const [pr, ci, doa, ba, pk, ko, doaM, js] = await Promise.all([
+      setNiatSalats([]);
+      setGerakanSalats([]);
+      const [pr, ci, doa, ba, pk, ko, niat, gerakan, doaM, js] = await Promise.all([
         supabase.from("presensi").select("id, status, tanggal").eq("santri_id", activeSantriId),
         supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri(surat(nama, jumlah_ayat))").eq("hafalan_santri.santri_id", activeSantriId),
         supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", activeSantriId),
         supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, status, catatan, surat(nama)").eq("santri_id", activeSantriId),
         supabase.from("praktik_salat").select("id, tanggal, status, catatan, jenis_salat(nama)").eq("santri_id", activeSantriId),
         supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat(nama)").eq("santri_id", activeSantriId),
+        supabase.from("perkembangan_niat_salat").select("id, tanggal, status, catatan, jenis_salat(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("perkembangan_gerakan_salat").select("id, tanggal, catatan").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("doa").select("id", { count: "exact", head: true }),
         supabase.from("jenis_salat").select("nama").eq("aktif", true),
       ]);
       if (cancelled) return;
-      const dashboardError = [pr, ci, doa, ba, pk, ko, doaM, js].find((result) => result.error)?.error;
+      const dashboardError = [pr, ci, doa, ba, pk, ko, niat, gerakan, doaM, js].find((result) => result.error)?.error;
       if (dashboardError) {
         setError("Data dashboard tidak dapat dimuat. Silakan coba lagi.");
         setLoading(false);
@@ -135,6 +145,8 @@ export default function OrangTuaDashboard() {
       setBacaans((ba.data ?? []) as unknown as BacaanRow[])
       setPraktiks((pk.data ?? []) as unknown as PraktikRow[])
       setKomponens((ko.data ?? []) as unknown as KomponenRow[])
+      setNiatSalats((niat.data ?? []) as unknown as NiatSalatRow[])
+      setGerakanSalats((gerakan.data ?? []) as unknown as GerakanSalatRow[])
       setTotalDoaMaster(doaM.count ?? 0)
       setJenisSalats((js.data ?? []).map((x) => x.nama))
       setLoading(false);
@@ -208,8 +220,12 @@ export default function OrangTuaDashboard() {
   const doaDihafal = new Set(doas.map((d) => d.doa?.nama).filter(Boolean)).size;
   const totalDoa = totalDoaMaster || 22;
 
-  // --- Praktik salat (per jenis, dari praktik_salat saja) ---
+  // Niat Salat model baru menjadi sumber utama; data legacy tetap dipakai sebagai riwayat lama.
   const praktikPerJenis = new Map<string, string>();
+  niatSalats.forEach((niat) => {
+    const nama = niat.jenis_salat?.nama;
+    if (nama && niat.tanggal && !praktikPerJenis.has(nama)) praktikPerJenis.set(nama, niat.status);
+  });
   praktiks.forEach((p) => {
     const nama = p.jenis_salat?.nama;
     if (nama && p.tanggal) {
@@ -228,6 +244,8 @@ export default function OrangTuaDashboard() {
   bacaans.forEach((r) => push("Bacaan", r.id, r.tanggal, r.jenis_bacaan === "IQRA" ? `Iqra ${r.jilid} · Hal. ${r.halaman}` : `${r.surat?.nama ?? "-"} · Juz ${r.juz ?? "-"}`, r.status, r.catatan));
   cicilans.forEach((r) => { const nama = r.hafalan_santri?.surat?.nama; if (!nama) return; push("Hafalan Surat", r.id, r.tanggal, `${nama} · ayat ${r.ayat_mulai}-${r.ayat_selesai}`, r.status, r.catatan); });
   doas.forEach((r) => { if (!r.doa?.nama) return; push("Hafalan Doa", r.id, r.tanggal, r.doa.nama, r.status, r.catatan); });
+  gerakanSalats.forEach((r) => push("Gerakan Salat", r.id, r.tanggal, "Penilaian delapan komponen", null, r.catatan));
+  niatSalats.forEach((r) => { if (!r.jenis_salat?.nama) return; push("Niat Salat", r.id, r.tanggal, r.jenis_salat.nama, r.status, r.catatan); });
   komponens.forEach((r) => { if (!r.komponen_salat?.nama) return; push("Salat Komponen", r.id, r.tanggal, r.komponen_salat.nama, r.status, r.catatan); });
   praktiks.forEach((r) => { if (!r.jenis_salat?.nama) return; push("Praktik Salat", r.id, r.tanggal, r.jenis_salat.nama, r.status, r.catatan); });
   const recentSorted = recent.sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1)).slice(0, 8);
@@ -326,7 +344,7 @@ export default function OrangTuaDashboard() {
           <CapaianBar label="Bacaan" value={latestBacaan ? (latestBacaan.jenis_bacaan === "IQRA" ? `Iqra Jilid ${latestBacaan.jilid} · Hal. ${latestBacaan.halaman}` : `${latestBacaan.surat?.nama ?? "-"} · Juz ${latestBacaan.juz ?? "-"}`) : "Belum ada catatan"} pct={latestBacaan?.jenis_bacaan === "IQRA" && latestBacaan.jilid ? Math.round((latestBacaan.jilid / 6) * 100) : 0} color="bg-amber-500" />
           <CapaianBar label="Hafalan Surat" value={`${suratLulus} dari ${TARGET_SURAT} surat tuntas`} pct={TARGET_SURAT ? Math.round((suratLulus / TARGET_SURAT) * 100) : 0} color="bg-indigo-500" />
           <CapaianBar label="Hafalan Doa" value={`${doaDihafal} dari ${totalDoa} doa`} pct={totalDoa ? Math.round((doaDihafal / totalDoa) * 100) : 0} color="bg-violet-500" />
-          <CapaianBar label="Praktik Salat" value={`${salatLancar} dari ${salatStatus.length} salat Lancar`} pct={salatStatus.length ? Math.round((salatLancar / salatStatus.length) * 100) : 0} color="bg-sky-500" />
+          <CapaianBar label="Niat Salat" value={`${salatLancar} dari ${salatStatus.length} salat Lancar`} pct={salatStatus.length ? Math.round((salatLancar / salatStatus.length) * 100) : 0} color="bg-sky-500" />
         </div>
         {trend.length >= 2 && (
           <div className="mt-4 rounded-lg border border-border/70 p-3 sm:p-4">
@@ -443,9 +461,9 @@ export default function OrangTuaDashboard() {
           </div>
         </section>
 
-        {/* CARD 5 — Praktik Salat */}
+        {/* CARD 5 — Niat Salat */}
         <section className="surface-panel min-w-0 p-5 sm:p-6 lg:col-span-2">
-          <SectionHeader title="Praktik Salat" description="Hasil praktik keseluruhan per salat" />
+          <SectionHeader title="Niat Salat" description="Status terbaru per jenis salat; gerakan tercatat sebagai riwayat terpisah." />
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
             {salatStatus.map((s) => (
               <div key={s.nama} className="rounded-lg border border-border p-3 text-center">

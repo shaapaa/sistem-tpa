@@ -25,6 +25,10 @@ const PERIODS = [
 
 interface Jadwal { id: string; hari: string; jam_mulai: string; jam_selesai: string }
 type PresensiRow = { status: string; santri_id: string; tanggal: string | null }
+type GerakanKomponenRow = {
+  status: string
+  perkembangan_gerakan_salat?: { santri_id: string; tanggal: string } | null
+}
 
 export default function PengajarDashboard() {
   const { user } = useAuth();
@@ -33,6 +37,8 @@ export default function PengajarDashboard() {
   const [presensi, setPresensi] = useState<PresensiRow[]>([]);
   const [attention, setAttention] = useState<{ nama: string; reason: string; id: string }[]>([]);
   const [monthPerk, setMonthPerk] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const [period, setPeriod] = useState("month");
   const [customFrom, setCustomFrom] = useState("");
@@ -41,29 +47,36 @@ export default function PengajarDashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!user) return;
+      if (!user) { setLoading(false); return; }
+      setLoading(true)
+      setLoadError("")
       const monthStart = currentMonthStart();
-      const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single();
-      if (!pengajar) return;
+      const { data: pengajar, error: pengajarError } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single();
+      if (pengajarError || !pengajar) { setLoadError("Profil Pengajar tidak dapat dimuat."); setLoading(false); return; }
 
-      const { data: kelompokData } = await supabase.from("kelompok").select("id").eq("pengajar_id", pengajar.id);
+      const { data: kelompokData, error: kelompokError } = await supabase.from("kelompok").select("id").eq("pengajar_id", pengajar.id);
+      if (kelompokError) { setLoadError("Penugasan kelompok tidak dapat dimuat."); setLoading(false); return; }
       const kelompokIds = (kelompokData ?? []).map((k) => k.id);
-      if (kelompokIds.length === 0) return;
+      if (kelompokIds.length === 0) { setLoadError("Belum ada kelompok yang ditugaskan kepada Anda. Hubungi Admin TPA."); setLoading(false); return; }
 
-      const { data: santriRes } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).eq("is_active", true).order("nama");
+      const { data: santriRes, error: santriError } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).eq("is_active", true).order("nama");
+      if (santriError) { setLoadError("Daftar Santri tidak dapat dimuat."); setLoading(false); return; }
       type SantriRow = { id: string; nama: string }
       const santris = (santriRes ?? []) as unknown as SantriRow[]
       const santriIds = santris.map((s) => s.id)
       setSantriCount(santris.length)
-      if (santriIds.length === 0) return
+      if (santriIds.length === 0) { setLoadError("Belum ada Santri aktif pada kelompok Anda."); setLoading(false); return }
 
-      const [jadwalRes, presensiRes, bacaanRes, cicilanRes, doaRes, salatRes] = await Promise.all([
+      const [jadwalRes, presensiRes, bacaanRes, cicilanRes, doaRes, legacySalatRes, gerakanRes, gerakanKomponenRes, niatRes] = await Promise.all([
         supabase.from("jadwal").select("id, hari, jam_mulai, jam_selesai").in("kelompok_id", kelompokIds).order("hari"),
         supabase.from("presensi").select("status, santri_id, tanggal").in("kelompok_id", kelompokIds),
         supabase.from("perkembangan_bacaan").select("santri_id, status, tanggal").in("santri_id", santriIds),
         supabase.from("hafalan_surat_cicilan").select("tanggal, status, hafalan_santri(santri_id)").in("hafalan_santri.santri_id", santriIds),
         supabase.from("perkembangan_hafalan_doa").select("santri_id, status, tanggal").in("santri_id", santriIds),
         supabase.from("praktik_salat").select("santri_id, status, tanggal").in("santri_id", santriIds),
+        supabase.from("perkembangan_gerakan_salat").select("santri_id, tanggal").in("santri_id", santriIds),
+        supabase.from("perkembangan_gerakan_salat_komponen").select("status, perkembangan_gerakan_salat!inner(santri_id, tanggal)").in("perkembangan_gerakan_salat.santri_id", santriIds),
+        supabase.from("perkembangan_niat_salat").select("santri_id, status, tanggal").in("santri_id", santriIds),
       ]);
 
       setJadwals((jadwalRes.data ?? []) as unknown as Jadwal[]);
@@ -75,12 +88,17 @@ export default function PengajarDashboard() {
       const bacaanRows = (bacaanRes.data ?? []) as unknown as PerkRow[]
       const cicilanRows = (cicilanRes.data ?? []) as unknown as CicilanRow[]
       const doaRows = (doaRes.data ?? []) as unknown as PerkRow[]
-      const salatRows = (salatRes.data ?? []) as unknown as PerkRow[]
+      const legacySalatRows = (legacySalatRes.data ?? []) as unknown as PerkRow[]
+      const gerakanRows = (gerakanRes.data ?? []) as unknown as PerkRow[]
+      const niatRows = (niatRes.data ?? []) as unknown as PerkRow[]
+      const gerakanKomponenRows = (gerakanKomponenRes.data ?? []) as unknown as GerakanKomponenRow[]
       setMonthPerk(
         bacaanRows.filter((r) => r.tanggal >= monthStart).length +
         cicilanRows.filter((r) => r.tanggal >= monthStart).length +
         doaRows.filter((r) => r.tanggal >= monthStart).length +
-        salatRows.filter((r) => r.tanggal >= monthStart).length
+        legacySalatRows.filter((r) => r.tanggal >= monthStart).length +
+        gerakanRows.filter((r) => r.tanggal >= monthStart).length +
+        niatRows.filter((r) => r.tanggal >= monthStart).length
       )
 
       // Attention: alpha >= 2 this month + KURANG statuses
@@ -94,7 +112,13 @@ export default function PengajarDashboard() {
       bacaanRows.forEach((r) => { if (KURANG(r.status) && r.tanggal >= monthStart) addReason(r.santri_id, "Perkembangan bacaan dinilai Kurang/Tidak Lancar") })
       cicilanRows.forEach((r) => { const sid = r.hafalan_santri?.santri_id; if (sid && KURANG(r.status) && r.tanggal >= monthStart) addReason(sid, "Hafalan dinilai Kurang/Tidak Lancar") })
       doaRows.forEach((r) => { if (KURANG(r.status) && r.tanggal >= monthStart) addReason(r.santri_id, "Hafalan doa dinilai Kurang/Tidak Lancar") })
-      salatRows.forEach((r) => { if (r.status === "BUTUH_BIMBINGAN" && r.tanggal >= monthStart) addReason(r.santri_id, "Praktik salat membutuhkan bimbingan") })
+      legacySalatRows.forEach((r) => { if (r.status === "BUTUH_BIMBINGAN" && r.tanggal >= monthStart) addReason(r.santri_id, "Praktik salat membutuhkan bimbingan") })
+      niatRows.forEach((r) => { if (r.status === "BUTUH_BIMBINGAN" && r.tanggal >= monthStart) addReason(r.santri_id, "Niat salat membutuhkan bimbingan") })
+      gerakanKomponenRows.forEach((r) => {
+        const santriId = r.perkembangan_gerakan_salat?.santri_id
+        const tanggal = r.perkembangan_gerakan_salat?.tanggal
+        if (santriId && tanggal && tanggal >= monthStart && r.status === "BUTUH_BIMBINGAN") addReason(santriId, "Gerakan salat membutuhkan bimbingan")
+      })
 
       const attList: { nama: string; reason: string; id: string }[] = []
       santris.forEach((s) => {
@@ -102,6 +126,7 @@ export default function PengajarDashboard() {
         if (reason) attList.push({ nama: s.nama, reason, id: s.id })
       })
       setAttention(attList)
+      setLoading(false)
     };
     fetchData();
   }, [user]);
@@ -140,6 +165,14 @@ export default function PengajarDashboard() {
     { name: "Sakit", value: attendance.sakit },
     { name: "Alpha", value: attendance.alpha },
   ].filter((d) => d.value > 0)
+
+  if (loading) return <div className="h-40 rounded-xl bg-muted animate-pulse" />
+  if (loadError) return (
+    <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
+      <UserX className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
+      <p className="text-sm text-muted-foreground">{loadError}</p>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -232,7 +265,7 @@ export default function PengajarDashboard() {
             {jadwals.map((j) => (
               <div key={j.id} className="flex items-center justify-between px-3 py-3 sm:px-4">
                 <div>
-                  <div className="text-sm font-medium text-foreground">{j.jam_mulai.slice(0, 5) === "07:30" ? "Sesi Pagi" : "Sesi Sore"}</div>
+                  <div className="text-sm font-medium text-foreground">{j.jam_mulai.slice(0, 5) === "08:00" ? "Sesi Pagi" : "Sesi Sore"}</div>
                   <div className="mt-0.5 text-xs text-muted-foreground">{formatHari(j.hari)} · <span className="font-tabular">{formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}</span></div>
                 </div>
               </div>

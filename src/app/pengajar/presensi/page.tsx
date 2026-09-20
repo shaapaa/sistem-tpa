@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { UserX, Loader2, Search, AlertCircle } from "lucide-react";
 import { formatStatus, getStatusBadgeVariant } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
+import { todayJakarta } from "@/lib/islamic-date";
 
 interface Santri { id: string; nama: string; kelompok_id: string | null }
 
@@ -26,7 +27,7 @@ const RANK: Record<string, number> = { "": 0, ALPHA: 1, IZIN: 2, SAKIT: 3, HADIR
 
 export default function PresensiPage() {
   const { user } = useAuth();
-  const [dailyDate, setDailyDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [dailyDate, setDailyDate] = useState(todayJakarta);
   const [dailyRows, setDailyRows] = useState<{ santri: Santri; status: string }[]>([]);
   const [dailyLoading, setDailyLoading] = useState(false);
   const [savingStatus, setSavingStatus] = useState<string | null>(null);
