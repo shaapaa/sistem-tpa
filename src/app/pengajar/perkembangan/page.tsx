@@ -16,7 +16,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { todayJakarta } from "@/lib/islamic-date";
 
 interface Santri { id: string; nama: string; kelompok_id: string | null }
-interface Kelompok { id: string; nama: string }
+interface Kelompok { id: string; nama: string; sesi: { nama: string } | null }
 interface Surat { id: string; nomor: number; nama: string; jumlah_ayat: number; juz: number }
 interface Doa { id: string; nama: string }
 interface Komponen { id: string; nama: string }
@@ -40,6 +40,12 @@ const KURANG_STATUS = [
 
 function saveErrorMessage(error: { message?: string } | null, fallback: string) {
   return error?.message ? `${fallback}: ${error.message}` : fallback
+}
+
+function kelompokLabel(kelompok: Kelompok) {
+  const namaSesi = kelompok.sesi?.nama
+  const sesi = namaSesi ? `${namaSesi.charAt(0)}${namaSesi.slice(1).toLowerCase()}` : "Tanpa sesi"
+  return `Kelompok ${kelompok.nama} (${sesi})`
 }
 
 export default function PerkembanganPage() {
@@ -101,6 +107,8 @@ export default function PerkembanganPage() {
 
   // Praktik Salat form: kemampuan gerakan umum dan niat per jenis salat.
   const [gerakanStatus, setGerakanStatus] = useState<Record<string, string>>({});
+  const [komponenLancarIds, setKomponenLancarIds] = useState<string[]>([]);
+  const [loadingKomponenLancar, setLoadingKomponenLancar] = useState(false);
   const [catatanGerakan, setCatatanGerakan] = useState("");
   const [jenisNiatSalatId, setJenisNiatSalatId] = useState("");
   const [statusNiatSalat, setStatusNiatSalat] = useState("LANCAR");
@@ -182,12 +190,12 @@ export default function PerkembanganPage() {
         setLoadingKelompoks(false)
         return
       }
-      const { data: k, error } = await supabase.from("kelompok").select("id, nama").eq("pengajar_id", pengajar.id).order("nama")
+      const { data: k, error } = await supabase.from("kelompok").select("id, nama, sesi(nama)").eq("pengajar_id", pengajar.id).order("nama")
       if (error) {
         setKelompoks([])
         setKelompokError("Daftar kelompok tidak dapat dimuat. Coba muat ulang halaman.")
       } else {
-        setKelompoks((k ?? []) as Kelompok[])
+        setKelompoks((k ?? []) as unknown as Kelompok[])
       }
       setLoadingKelompoks(false)
     }
@@ -290,9 +298,37 @@ export default function PerkembanganPage() {
     loadHafalanDoaTerakhir()
   }, [selectedSantri, doaId])
 
+  const loadKomponenLancar = async () => {
+    if (!selectedSantri) {
+      setKomponenLancarIds([])
+      setLoadingKomponenLancar(false)
+      return
+    }
+
+    setLoadingKomponenLancar(true)
+    const { data, error } = await supabase
+      .from("perkembangan_gerakan_salat_komponen")
+      .select("komponen_salat_id, perkembangan_gerakan_salat!inner(santri_id)")
+      .eq("status", "LANCAR")
+      .eq("perkembangan_gerakan_salat.santri_id", selectedSantri)
+
+    if (error) {
+      setKomponenLancarIds([])
+      setGerakanError("Riwayat gerakan salat gagal dimuat. Coba muat ulang halaman.")
+    } else {
+      setKomponenLancarIds([...new Set((data ?? []).map((item) => item.komponen_salat_id))])
+    }
+    setLoadingKomponenLancar(false)
+  }
+
+  useEffect(() => {
+    void Promise.resolve().then(loadKomponenLancar)
+  }, [selectedSantri])
+
   const filteredSantris = santris.filter((s) => s.nama.toLowerCase().includes(search.toLowerCase()))
   const selectedKelompokData = kelompoks.find((kelompok) => kelompok.id === selectedKelompok)
   const selectedQuranSurat = bacaanSurats.find((surat) => surat.id === quranSuratId)
+  const komponenBelumLancar = komponens.filter((komponen) => !komponenLancarIds.includes(komponen.id))
   const jenisBacaan = selectedKelompokData?.nama === "A"
     ? "IQRA"
     : selectedKelompokData?.nama === "B"
@@ -347,6 +383,8 @@ export default function PerkembanganPage() {
 
   const resetPraktikSalatForm = () => {
     setGerakanStatus({})
+    setKomponenLancarIds([])
+    setLoadingKomponenLancar(false)
     setCatatanGerakan("")
     setJenisNiatSalatId("")
     setStatusNiatSalat("LANCAR")
@@ -513,12 +551,16 @@ export default function PerkembanganPage() {
   const handleSaveGerakanSalat = async () => {
     if (!selectedSantri || !user) return
     setGerakanError("")
-    const penilaianKomponen = komponens.map((komponen) => ({
+    const penilaianKomponen = komponenBelumLancar.map((komponen) => ({
       komponen_salat_id: komponen.id,
       status: gerakanStatus[komponen.id],
     }))
-    if (komponens.length !== 8 || penilaianKomponen.some((komponen) => !KURANG_STATUS.some((status) => status.value === komponen.status))) {
-      setGerakanError("Semua delapan komponen gerakan salat wajib dinilai")
+    if (penilaianKomponen.length === 0) {
+      setGerakanError("Semua komponen gerakan salat sudah Lancar")
+      return
+    }
+    if (penilaianKomponen.some((komponen) => !KURANG_STATUS.some((status) => status.value === komponen.status))) {
+      setGerakanError("Semua komponen gerakan salat yang belum Lancar wajib dinilai")
       return
     }
 
@@ -539,6 +581,7 @@ export default function PerkembanganPage() {
     setSavedGerakan(true)
     setGerakanStatus({})
     setCatatanGerakan("")
+    await loadKomponenLancar()
     setTimeout(() => setSavedGerakan(false), 2500)
   }
 
@@ -586,10 +629,10 @@ export default function PerkembanganPage() {
           ) : kelompoks.length === 0 ? (
             <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Belum ada kelompok yang ditugaskan kepada Anda. Hubungi Admin TPA.</p>
           ) : (
-            <Select value={selectedKelompok} onValueChange={handleKelompokChange} items={kelompoks.map((k) => ({ label: `Kelompok ${k.nama}`, value: k.id }))}>
+            <Select value={selectedKelompok} onValueChange={handleKelompokChange} items={kelompoks.map((k) => ({ label: kelompokLabel(k), value: k.id }))}>
               <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelompok" /></SelectTrigger>
               <SelectContent>
-                {kelompoks.map((k) => <SelectItem key={k.id} value={k.id}>Kelompok {k.nama}</SelectItem>)}
+                {kelompoks.map((k) => <SelectItem key={k.id} value={k.id}>{kelompokLabel(k)}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
@@ -881,36 +924,49 @@ export default function PerkembanganPage() {
                 <Card className="card-elevated">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium">Gerakan Salat</CardTitle>
-                    <p className="text-sm text-muted-foreground">Nilai seluruh delapan kemampuan gerakan umum Santri.</p>
+                    <p className="text-sm text-muted-foreground">Komponen yang sudah Lancar tetap ditampilkan, tetapi dikunci agar tidak dinilai ulang.</p>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      {komponens.map((komponen) => (
+                    {loadingKomponenLancar ? (
+                      <p className="text-sm text-muted-foreground">Memuat capaian gerakan salat...</p>
+                    ) : (
+                      <div className="space-y-2">
+                      {komponens.map((komponen) => {
+                        const sudahLancar = komponenLancarIds.includes(komponen.id)
+                        return (
                         <div key={komponen.id} className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                          <span className="text-sm font-medium text-foreground">{komponen.nama}</span>
+                          <div>
+                            <span className="text-sm font-medium text-foreground">{komponen.nama}</span>
+                            {sudahLancar && <p className="text-xs font-medium text-green-700">Sudah Lancar — terkunci</p>}
+                          </div>
                           <div className="flex gap-1.5">
                             {KURANG_STATUS.map((status) => (
                               <button
                                 key={status.value}
                                 type="button"
-                                onClick={() => setGerakanStatus((prev) => ({ ...prev, [komponen.id]: status.value }))}
-                                className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${gerakanStatus[komponen.id] === status.value ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
+                                disabled={sudahLancar}
+                                onClick={() => !sudahLancar && setGerakanStatus((prev) => ({ ...prev, [komponen.id]: status.value }))}
+                                className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${sudahLancar && status.value === "LANCAR" ? "border-green-600 bg-green-600 text-white" : gerakanStatus[komponen.id] === status.value ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
                               >
                                 {status.label}
                               </button>
                             ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Catatan (Opsional)</Label>
-                      <Textarea value={catatanGerakan} onChange={(e) => setCatatanGerakan(e.target.value)} placeholder="Tambahkan catatan penilaian gerakan..." className="min-h-[80px]" />
-                    </div>
+                        )
+                      })}
+                      </div>
+                    )}
+                    {komponenBelumLancar.length > 0 && !loadingKomponenLancar && <>
+                      <div className="space-y-2">
+                        <Label>Catatan (Opsional)</Label>
+                        <Textarea value={catatanGerakan} onChange={(e) => setCatatanGerakan(e.target.value)} placeholder="Tambahkan catatan penilaian gerakan..." className="min-h-[80px]" />
+                      </div>
+                      <Button onClick={handleSaveGerakanSalat} disabled={savingGerakan} className="h-9 px-4">
+                        {savingGerakan ? "Menyimpan..." : savedGerakan ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan Penilaian Gerakan</>}
+                      </Button>
+                    </>}
                     {gerakanError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{gerakanError}</p>}
-                    <Button onClick={handleSaveGerakanSalat} disabled={savingGerakan} className="h-9 px-4">
-                      {savingGerakan ? "Menyimpan..." : savedGerakan ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan Penilaian Gerakan</>}
-                    </Button>
                   </CardContent>
                 </Card>
 

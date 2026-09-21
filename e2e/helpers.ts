@@ -33,7 +33,7 @@ export async function login(page: Page, role: Role) {
 export async function pickSelect(page: Page, labelText: string, optionLabel: string) {
   const field = page.locator(`div:has(> label:text-is("${labelText}"))`).last()
   await field.getByRole("combobox").click()
-  await page.getByRole("option", { name: optionLabel, exact: true }).click()
+  await page.getByRole("option", { name: optionLabel, exact: false }).click()
 }
 
 /** Klik tombol konfirmasi (ConfirmDialog) dengan label tertentu. */
