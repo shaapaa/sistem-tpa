@@ -17,11 +17,6 @@ interface Sesi {
   nama: string
 }
 
-interface Pengajar {
-  id: string
-  nama: string
-}
-
 interface Kelompok {
   id: string
   sesi_id: string
@@ -34,7 +29,6 @@ const SESI_LABEL: Record<string, string> = { PAGI: "Pagi", SORE: "Sore" }
 
 export default function KelompokPage() {
   const [sesis, setSesis] = useState<Sesi[]>([])
-  const [pengajars, setPengajars] = useState<Pengajar[]>([])
   const [kelompoks, setKelompoks] = useState<Kelompok[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -46,13 +40,11 @@ export default function KelompokPage() {
   const supabase = createClient()
 
   const fetchData = async () => {
-    const [sesiRes, pengajarRes, kelompokRes] = await Promise.all([
+    const [sesiRes, kelompokRes] = await Promise.all([
       supabase.from("sesi").select("id, nama").order("nama"),
-      supabase.from("pengajar").select("id, nama").order("nama"),
       supabase.from("kelompok").select("*, pengajar(nama)").order("sesi_id").order("nama"),
     ])
     setSesis(sesiRes.data ?? [])
-    setPengajars(pengajarRes.data ?? [])
     setKelompoks(kelompokRes.data ?? [])
     setLoading(false)
   }
@@ -82,7 +74,6 @@ export default function KelompokPage() {
     const payload = {
       sesi_id: form.sesi_id,
       nama: form.nama,
-      pengajar_id: form.pengajar_id || null,
     }
     if (editing) {
       const { error } = await supabase.from("kelompok").update(payload).eq("id", editing.id)
@@ -114,7 +105,7 @@ export default function KelompokPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Struktur belajar" title="Kelompok" description="Kelola sesi, kelompok, dan penugasan pengajar." />
+      <PageHeader eyebrow="Struktur belajar" title="Kelompok" description="Kelola kelompok materi Iqra dan Al-Qur'an. Penugasan pengajar diatur dari Jadwal Sesi." />
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2">
@@ -143,7 +134,7 @@ export default function KelompokPage() {
                             <div className="rounded-lg bg-primary/10 p-2 text-primary"><BookOpen className="h-4 w-4" /></div>
                             <div>
                               <p className="font-medium text-foreground">Kelompok {k.nama} <span className="text-xs text-muted-foreground">({k.nama === "A" ? "Iqra" : "Al-Qur'an"})</span></p>
-                              <p className="text-xs text-muted-foreground">{k.pengajar?.nama ?? "Pengajar belum ditugaskan"}</p>
+                              <p className="text-xs text-muted-foreground">Materi {k.nama === "A" ? "Iqra" : "Al-Qur'an"}</p>
                             </div>
                           </div>
                           <div className="flex gap-1">
@@ -190,16 +181,7 @@ export default function KelompokPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Pengajar</Label>
-              <Select value={form.pengajar_id} onValueChange={(v: string | null) => setForm({ ...form, pengajar_id: v ?? "" })} items={[{ label: "Belum ditugaskan", value: "" }, ...pengajars.map((p) => ({ label: p.nama, value: p.id }))]}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Pilih pengajar" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Belum ditugaskan</SelectItem>
-                  {pengajars.map((p) => <SelectItem key={p.id} value={p.id}>{p.nama}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">Pengajar tidak lagi ditetapkan per kelompok. Atur pengajar untuk seluruh sesi melalui menu Jadwal.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving} className="h-9">Batal</Button>

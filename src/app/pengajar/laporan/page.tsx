@@ -76,7 +76,7 @@ export default function LaporanPage() {
       if (!user) return;
       const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single();
       if (!pengajar) return;
-      const { data: k } = await supabase.from("kelompok").select("id").eq("pengajar_id", pengajar.id);
+      const { data: k } = await supabase.from("kelompok").select("id");
       const kelompokIds = (k ?? []).map((x) => x.id);
       if (kelompokIds.length === 0) return;
       const { data } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).eq("is_active", true).order("nama");

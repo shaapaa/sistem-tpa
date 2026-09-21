@@ -54,7 +54,7 @@ export default function PengajarDashboard() {
       const { data: pengajar, error: pengajarError } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single();
       if (pengajarError || !pengajar) { setLoadError("Profil Pengajar tidak dapat dimuat."); setLoading(false); return; }
 
-      const { data: kelompokData, error: kelompokError } = await supabase.from("kelompok").select("id").eq("pengajar_id", pengajar.id);
+      const { data: kelompokData, error: kelompokError } = await supabase.from("kelompok").select("id");
       if (kelompokError) { setLoadError("Penugasan kelompok tidak dapat dimuat."); setLoading(false); return; }
       const kelompokIds = (kelompokData ?? []).map((k) => k.id);
       if (kelompokIds.length === 0) { setLoadError("Belum ada kelompok yang ditugaskan kepada Anda. Hubungi Admin TPA."); setLoading(false); return; }
@@ -68,7 +68,7 @@ export default function PengajarDashboard() {
       if (santriIds.length === 0) { setLoadError("Belum ada Santri aktif pada kelompok Anda."); setLoading(false); return }
 
       const [jadwalRes, presensiRes, bacaanRes, cicilanRes, doaRes, legacySalatRes, gerakanRes, gerakanKomponenRes, niatRes] = await Promise.all([
-        supabase.from("jadwal").select("id, hari, jam_mulai, jam_selesai").in("kelompok_id", kelompokIds).order("hari"),
+        supabase.from("jadwal_sesi").select("id, hari, jam_mulai, jam_selesai").order("hari"),
         supabase.from("presensi").select("status, santri_id, tanggal").in("kelompok_id", kelompokIds),
         supabase.from("perkembangan_bacaan").select("santri_id, status, tanggal").in("santri_id", santriIds),
         supabase.from("hafalan_surat_cicilan").select("tanggal, status, hafalan_santri(santri_id)").in("hafalan_santri.santri_id", santriIds),

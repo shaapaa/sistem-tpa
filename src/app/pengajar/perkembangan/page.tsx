@@ -15,7 +15,7 @@ import { Save, BookOpen, BookMarked, Moon, CheckCircle, ArrowLeft } from "lucide
 import { PageHeader } from "@/components/layout/page-header";
 import { todayJakarta } from "@/lib/islamic-date";
 
-interface Santri { id: string; nama: string; kelompok_id: string | null }
+interface Santri { id: string; nama: string; kelompok_id: string | null; kelompok?: { nama: string } | null }
 interface Kelompok { id: string; nama: string; sesi: { nama: string } | null }
 interface Surat { id: string; nomor: number; nama: string; jumlah_ayat: number; juz: number }
 interface Doa { id: string; nama: string }
@@ -42,16 +42,10 @@ function saveErrorMessage(error: { message?: string } | null, fallback: string) 
   return error?.message ? `${fallback}: ${error.message}` : fallback
 }
 
-function kelompokLabel(kelompok: Kelompok) {
-  const namaSesi = kelompok.sesi?.nama
-  const sesi = namaSesi ? `${namaSesi.charAt(0)}${namaSesi.slice(1).toLowerCase()}` : "Tanpa sesi"
-  return `Kelompok ${kelompok.nama} (${sesi})`
-}
-
 export default function PerkembanganPage() {
   const { user } = useAuth();
   const [kelompoks, setKelompoks] = useState<Kelompok[]>([]);
-  const [selectedKelompok, setSelectedKelompok] = useState("");
+  const [selectedSesi, setSelectedSesi] = useState("");
   const [loadingKelompoks, setLoadingKelompoks] = useState(true);
   const [kelompokError, setKelompokError] = useState("");
   const [santris, setSantris] = useState<Santri[]>([]);
@@ -190,7 +184,8 @@ export default function PerkembanganPage() {
         setLoadingKelompoks(false)
         return
       }
-      const { data: k, error } = await supabase.from("kelompok").select("id, nama, sesi(nama)").eq("pengajar_id", pengajar.id).order("nama")
+      // RLS hanya mengembalikan kelompok dalam sesi yang menjadi cakupan pengajar.
+      const { data: k, error } = await supabase.from("kelompok").select("id, nama, sesi(nama)").order("nama")
       if (error) {
         setKelompoks([])
         setKelompokError("Daftar kelompok tidak dapat dimuat. Coba muat ulang halaman.")
@@ -204,22 +199,24 @@ export default function PerkembanganPage() {
 
   useEffect(() => {
     const fetchSantris = async () => {
-      if (!selectedKelompok) { setSantris([]); setSantriError(""); setLoadingSantris(false); return; }
+      if (!selectedSesi) { setSantris([]); setSantriError(""); setLoadingSantris(false); return; }
+      const kelompokIds = kelompoks.filter((kelompok) => kelompok.sesi?.nama === selectedSesi).map((kelompok) => kelompok.id)
+      if (kelompokIds.length === 0) { setSantris([]); setLoadingSantris(false); return; }
       setLoadingSantris(true)
       setSantriError("")
-      const { data, error } = await supabase.from("santri").select("id, nama, kelompok_id").eq("kelompok_id", selectedKelompok).eq("is_active", true).order("nama")
+      const { data, error } = await supabase.from("santri").select("id, nama, kelompok_id, kelompok(nama)").in("kelompok_id", kelompokIds).eq("is_active", true).order("nama")
       if (error) {
         setSantris([])
-        setSantriError("Daftar Santri tidak dapat dimuat. Coba pilih kelompok lagi atau muat ulang halaman.")
+        setSantriError("Daftar santri sesi ini tidak dapat dimuat. Coba pilih sesi lagi atau muat ulang halaman.")
       } else {
-        setSantris((data ?? []) as Santri[])
+        setSantris((data ?? []) as unknown as Santri[])
       }
       setSelectedSantri("")
       setSearch("")
       setLoadingSantris(false)
     }
     fetchSantris()
-  }, [selectedKelompok])
+  }, [selectedSesi, kelompoks])
 
   // Tampilan progres hanya untuk UX. RPC tetap menghitung ulang ayat mulai saat simpan.
   const loadAyatMulai = async () => {
@@ -326,7 +323,8 @@ export default function PerkembanganPage() {
   }, [selectedSantri])
 
   const filteredSantris = santris.filter((s) => s.nama.toLowerCase().includes(search.toLowerCase()))
-  const selectedKelompokData = kelompoks.find((kelompok) => kelompok.id === selectedKelompok)
+  const sesiOptions = [...new Set(kelompoks.map((kelompok) => kelompok.sesi?.nama).filter((nama): nama is string => Boolean(nama)))]
+  const selectedKelompokData = kelompoks.find((kelompok) => kelompok.id === santris.find((santri) => santri.id === selectedSantri)?.kelompok_id)
   const selectedQuranSurat = bacaanSurats.find((surat) => surat.id === quranSuratId)
   const komponenBelumLancar = komponens.filter((komponen) => !komponenLancarIds.includes(komponen.id))
   const jenisBacaan = selectedKelompokData?.nama === "A"
@@ -395,8 +393,8 @@ export default function PerkembanganPage() {
     setSavedNiat(false)
   }
 
-  const handleKelompokChange = (kelompokId: string | null) => {
-    setSelectedKelompok(kelompokId ?? "")
+  const handleSesiChange = (sesi: string | null) => {
+    setSelectedSesi(sesi ?? "")
     setSelectedSantri("")
     setSearch("")
     resetBacaanForm()
@@ -621,7 +619,7 @@ export default function PerkembanganPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Kelompok</Label>
+          <Label>Sesi belajar</Label>
           {loadingKelompoks ? (
             <div className="h-9 animate-pulse rounded-md bg-muted" />
           ) : kelompokError ? (
@@ -629,32 +627,32 @@ export default function PerkembanganPage() {
           ) : kelompoks.length === 0 ? (
             <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Belum ada kelompok yang ditugaskan kepada Anda. Hubungi Admin TPA.</p>
           ) : (
-            <Select value={selectedKelompok} onValueChange={handleKelompokChange} items={kelompoks.map((k) => ({ label: kelompokLabel(k), value: k.id }))}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Pilih kelompok" /></SelectTrigger>
+            <Select value={selectedSesi} onValueChange={handleSesiChange} items={sesiOptions.map((sesi) => ({ label: `${sesi.charAt(0)}${sesi.slice(1).toLowerCase()}`, value: sesi }))}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Pilih sesi" /></SelectTrigger>
               <SelectContent>
-                {kelompoks.map((k) => <SelectItem key={k.id} value={k.id}>{kelompokLabel(k)}</SelectItem>)}
+                {sesiOptions.map((sesi) => <SelectItem key={sesi} value={sesi}>{sesi.charAt(0)}{sesi.slice(1).toLowerCase()}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
         </div>
         <div className="space-y-2">
-          <Label>Santri ({santris.length})</Label>
+          <Label>Santri dalam sesi ({santris.length})</Label>
           {loadingSantris ? (
             <div className="h-9 animate-pulse rounded-md bg-muted" />
           ) : santriError ? (
             <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{santriError}</p>
           ) : (
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-3" placeholder="Cari nama santri..." disabled={!selectedKelompok || kelompoks.length === 0} />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-3" placeholder="Cari nama santri..." disabled={!selectedSesi || kelompoks.length === 0} />
           )}
         </div>
       </div>
 
-      {selectedKelompok && !selectedSantri && !loadingSantris && !santriError && (
+      {selectedSesi && !selectedSantri && !loadingSantris && !santriError && (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="max-h-72 overflow-y-auto">
             {filteredSantris.length === 0 ? (
               <div className="p-5 text-center text-sm text-muted-foreground sm:p-8">
-                Tidak ada santri pada kelompok ini
+                Belum ada santri pada sesi ini
               </div>
             ) : (
               filteredSantris.map((s) => (
@@ -667,6 +665,7 @@ export default function PerkembanganPage() {
                     {s.nama.charAt(0)}
                   </span>
                   <span className="font-medium text-foreground">{s.nama}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">Kelompok {s.kelompok?.nama ?? "-"}</span>
                 </button>
               ))
             )}
@@ -1009,7 +1008,7 @@ export default function PerkembanganPage() {
           </TabsContent>
         </Tabs>
         </>
-      ) : selectedKelompok ? (
+      ) : selectedSesi ? (
         <div className="rounded-xl border border-dashed border-border p-6 text-center sm:p-12">
           <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
           <p className="text-sm text-muted-foreground">Pilih santri untuk mulai input perkembangan</p>

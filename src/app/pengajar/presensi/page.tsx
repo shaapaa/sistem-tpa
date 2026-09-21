@@ -41,7 +41,8 @@ export default function PresensiPage() {
       const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single();
       if (!pengajar) { setDailyLoading(false); return; }
 
-      const { data: kelompokData } = await supabase.from("kelompok").select("id").eq("pengajar_id", pengajar.id);
+      // RLS memperluas penugasan pengajar ke seluruh kelompok pada sesi yang sama.
+      const { data: kelompokData } = await supabase.from("kelompok").select("id");
       const kelompokIds = (kelompokData ?? []).map((k) => k.id);
       if (kelompokIds.length === 0) { setDailyLoading(false); setDailyRows([]); return; }
 

@@ -67,7 +67,7 @@ export default function RekapPerkembanganPage() {
       if (!user) return
       const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
       if (!pengajar) return
-      const { data: k } = await supabase.from("kelompok").select("id, nama").eq("pengajar_id", pengajar.id).order("nama")
+      const { data: k } = await supabase.from("kelompok").select("id, nama").order("nama")
       setKelompoks((k ?? []) as { id: string; nama: string }[])
     }
     fetchKelompok()
@@ -88,7 +88,7 @@ export default function RekapPerkembanganPage() {
       if (!user) return
       const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single()
       if (!pengajar) return
-      const { data: k } = await supabase.from("kelompok").select("id").eq("pengajar_id", pengajar.id)
+      const { data: k } = await supabase.from("kelompok").select("id")
       const kelompokIds = (k ?? []).map((x) => x.id)
       if (kelompokIds.length === 0) { setItems([]); return }
       const { data: santriRes } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).eq("is_active", true)
