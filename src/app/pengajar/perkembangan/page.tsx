@@ -924,7 +924,7 @@ export default function PerkembanganPage() {
                 <Card className="card-elevated">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium">Gerakan Salat</CardTitle>
-                    <p className="text-sm text-muted-foreground">Komponen yang sudah Lancar tetap ditampilkan, tetapi dikunci agar tidak dinilai ulang.</p>
+
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {loadingKomponenLancar ? (
@@ -937,7 +937,7 @@ export default function PerkembanganPage() {
                         <div key={komponen.id} className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <span className="text-sm font-medium text-foreground">{komponen.nama}</span>
-                            {sudahLancar && <p className="text-xs font-medium text-green-700">Sudah Lancar — terkunci</p>}
+                            {sudahLancar && <p className="text-xs font-medium text-green-700">Sudah Lancar </p>}
                           </div>
                           <div className="flex gap-1.5">
                             {KURANG_STATUS.map((status) => (
