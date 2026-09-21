@@ -20,9 +20,11 @@ function WaliSantriGuard({ children }: { children: React.ReactNode }) {
       setStatus("checking");
       const supabase = createClient();
       const { count, error } = await supabase
-        .from("wali_santri")
+        .from("santri")
         .select("id", { count: "exact", head: true })
-        .eq("profile_id", user.id);
+
+      // Query santri mengikuti RLS relasi wali_santri. Dengan begitu, akun
+      // yang baru berhasil terhubung langsung dapat melewati guard ini.
 
       if (!active) return;
       if (error) {

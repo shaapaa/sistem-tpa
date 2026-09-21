@@ -13,9 +13,10 @@ async function homeForRole(
   if (role === "PENGAJAR") return "/pengajar";
   if (role === "SANTRI") {
     const { count, error } = await supabase
-      .from("wali_santri")
+      .from("santri")
       .select("id", { count: "exact", head: true })
-      .eq("profile_id", userId);
+      // RLS pada santri sudah membatasi hasil ke anak yang terhubung. Ini
+      // menghindari ketergantungan pada policy SELECT tabel relasi wali_santri.
 
     return !error && (count ?? 0) > 0 ? "/orang-tua" : "/orang-tua/anak";
   }

@@ -87,9 +87,8 @@ export default function LoginPage() {
         router.replace("/pengajar")
       } else {
         const { count, error: waliError } = await supabase
-          .from("wali_santri")
+          .from("santri")
           .select("id", { count: "exact", head: true })
-          .eq("profile_id", user.id)
 
         if (waliError) {
           setError("Status data anak belum dapat diperiksa. Silakan coba lagi.")
