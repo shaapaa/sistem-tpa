@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Activity, BookOpen, CalendarCheck, CalendarDays, GraduationCap, HeartPulse, UserCog, UserX, Users } from "lucide-react"
 
 type PresensiRow = { status: string }
-type JadwalRow = { id: string; kelompok?: { id: string; nama: string; sesi?: { nama: string } | null; pengajar?: { nama: string } | null } | null }
+type JadwalRow = { id: string; sesi?: { id: string; nama: string; pengajar?: { nama: string } | null } | null }
 
 const PERIODS = [
   { label: "Hari Ini", value: "TODAY" },
@@ -57,7 +57,7 @@ export default function AdminDashboard() {
   const [iqraCount, setIqraCount] = useState(0)
   const [quranCount, setQuranCount] = useState(0)
   const [tanpaKlasifikasi, setTanpaKlasifikasi] = useState(0)
-  const [santriPerKelompok, setSantriPerKelompok] = useState<Record<string, number>>({})
+  const [santriPerSesi, setSantriPerSesi] = useState<Record<string, number>>({})
   const [presensi, setPresensi] = useState<PresensiRow[]>([])
   const [jadwal, setJadwal] = useState<JadwalRow[]>([])
   const today = useMemo(jakartaToday, [])
@@ -86,7 +86,7 @@ export default function AdminDashboard() {
         supabase.from("pengajar").select("id, profiles!inner(id)", { count: "exact", head: true }).not("profile_id", "is", null).eq("profiles.role", "PENGAJAR").eq("profiles.is_active", true),
         supabase.from("kelompok").select("id", { count: "exact", head: true }),
         supabase.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", true).in("role", ["ADMIN", "PENGAJAR", "SANTRI"]),
-        supabase.from("santri").select("keterangan, kelompok_id").eq("is_active", true),
+        supabase.from("santri").select("keterangan, kelompok(sesi_id)").eq("is_active", true),
       ])
       const queryError = [santriRes, pengajarRes, kelompokRes, akunRes, komposisiRes].find((result) => result.error)?.error
       if (queryError) {
@@ -94,9 +94,9 @@ export default function AdminDashboard() {
         setSnapshotLoading(false)
         return
       }
-      const komposisi = (komposisiRes.data ?? []) as { keterangan: string | null; kelompok_id: string | null }[]
-      const perKelompok: Record<string, number> = {}
-      komposisi.forEach((santri) => { if (santri.kelompok_id) perKelompok[santri.kelompok_id] = (perKelompok[santri.kelompok_id] ?? 0) + 1 })
+      const komposisi = (komposisiRes.data ?? []) as unknown as { keterangan: string | null; kelompok?: { sesi_id: string }[] | null }[]
+      const perSesi: Record<string, number> = {}
+      komposisi.forEach((santri) => { const sesiId = santri.kelompok?.[0]?.sesi_id; if (sesiId) perSesi[sesiId] = (perSesi[sesiId] ?? 0) + 1 })
       setSantriAktif(santriRes.count ?? 0)
       setPengajarAktif(pengajarRes.count ?? 0)
       setKelompokAktif(kelompokRes.count ?? 0)
@@ -104,7 +104,7 @@ export default function AdminDashboard() {
       setIqraCount(komposisi.filter((santri) => santri.keterangan === "IQRA").length)
       setQuranCount(komposisi.filter((santri) => santri.keterangan === "QURAN").length)
       setTanpaKlasifikasi(komposisi.filter((santri) => santri.keterangan !== "IQRA" && santri.keterangan !== "QURAN").length)
-      setSantriPerKelompok(perKelompok)
+      setSantriPerSesi(perSesi)
       setSnapshotLoading(false)
     }
     void fetchSnapshot()
@@ -118,7 +118,7 @@ export default function AdminDashboard() {
       setPeriodError(null)
       const [presensiRes, jadwalRes] = await Promise.all([
         supabase.from("presensi").select("status").gte("tanggal", range.start).lte("tanggal", range.end),
-        supabase.from("jadwal").select("id, kelompok(id, nama, sesi(nama), pengajar(nama))").eq("hari", dayName(jadwalDate)).eq("is_active", true),
+        supabase.from("jadwal_sesi").select("id, sesi(id, nama, pengajar(nama))").eq("hari", dayName(jadwalDate)).eq("is_active", true),
       ])
       if (cancelled) return
       const queryError = [presensiRes, jadwalRes].find((result) => result.error)?.error
@@ -164,10 +164,10 @@ export default function AdminDashboard() {
     <div className="grid gap-6 lg:grid-cols-2"><section className="surface-panel p-5 sm:p-6"><SectionHeader title="Komposisi Santri" description="Berdasarkan jenis bacaan dan kelompok otomatis." />{santriAktif === 0 ? <div className="mt-5"><EmptyState message="Belum ada Santri aktif." /></div> : <div className="mt-5 space-y-5"><div className="flex items-end justify-between gap-4"><div><p className="text-3xl font-semibold tracking-tight text-foreground">{santriAktif}</p><p className="text-sm text-muted-foreground">Seluruh Santri aktif</p></div><Badge variant="outline">Kelompok A & B</Badge></div><div className="overflow-hidden rounded-full bg-muted"><div className="flex h-3"><span className="bg-emerald-600" style={{ width: `${iqraPct}%` }} /><span className="bg-indigo-500" style={{ width: `${quranPct}%` }} /></div></div><div className="grid grid-cols-2 gap-3"><CompositionItem label="Iqra · Kelompok A" value={iqraCount} pct={iqraPct} tone="emerald" /><CompositionItem label="Al-Qur'an · Kelompok B" value={quranCount} pct={quranPct} tone="indigo" /></div>{tanpaKlasifikasi > 0 && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{tanpaKlasifikasi} Santri aktif belum memiliki klasifikasi Iqra atau Al-Qur&apos;an dan tidak dimasukkan ke Kelompok A/B.</p>}</div>}</section>
       <section className="surface-panel p-5 sm:p-6"><SectionHeader title="Presensi" description={rangeValid ? rangeLabel : "Periode tidak valid"} />{!rangeValid ? <div className="mt-5"><EmptyState message="Pilih rentang tanggal yang valid untuk melihat presensi." /></div> : periodLoading ? <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-muted" />)}</div> : periodError ? <p className="mt-5 text-sm text-destructive">{periodError}</p> : presensi.length === 0 ? <div className="mt-5"><EmptyState message={period === "TODAY" ? "Belum ada data presensi hari ini." : "Belum ada data presensi pada periode ini."} hint="Presensi akan muncul setelah Pengajar melakukan pencatatan." /></div> : <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4"><StatusItem label="Hadir" value={presensiSummary.hadir} icon={CalendarCheck} tone="text-emerald-700 bg-emerald-50" /><StatusItem label="Izin" value={presensiSummary.izin} icon={CalendarDays} tone="text-amber-700 bg-amber-50" /><StatusItem label="Sakit" value={presensiSummary.sakit} icon={HeartPulse} tone="text-orange-700 bg-orange-50" /><StatusItem label="Alpa" value={presensiSummary.alpa} icon={UserX} tone="text-rose-700 bg-rose-50" /></div>}</section></div>
 
-    <section className="surface-panel p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><SectionHeader title="Jadwal" description={jadwalDateValid ? `Jadwal berulang untuk ${formatDate(jadwalDate)}.` : "Pilih tanggal referensi dalam periode."} /><div className="w-full sm:w-52"><Label className="text-[10px] text-muted-foreground">Tanggal referensi jadwal</Label><div className="mt-1"><DatePicker value={jadwalDate} onChange={setJadwalDate} /></div></div></div>{!jadwalDateValid ? <div className="mt-5"><EmptyState message="Tanggal jadwal harus berada dalam periode yang dipilih." /></div> : periodLoading ? <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 3 }).map((_, index) => <div key={index} className="h-40 animate-pulse rounded-xl bg-muted" />)}</div> : periodError ? <p className="mt-5 text-sm text-destructive">{periodError}</p> : jadwal.length === 0 ? <div className="mt-5"><EmptyState message="Belum ada jadwal untuk tanggal ini." hint="Jadwal mengikuti hari dalam minggu dari tanggal referensi." /></div> : <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{jadwal.map((item) => <ScheduleItem key={item.id} item={item} santriCount={santriPerKelompok[item.kelompok?.id ?? ""] ?? 0} />)}</div>}</section>
+    <section className="surface-panel p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><SectionHeader title="Jadwal Sesi" description={jadwalDateValid ? `Jadwal berulang untuk ${formatDate(jadwalDate)}.` : "Pilih tanggal referensi dalam periode."} /><div className="w-full sm:w-52"><Label className="text-[10px] text-muted-foreground">Tanggal referensi jadwal</Label><div className="mt-1"><DatePicker value={jadwalDate} onChange={setJadwalDate} /></div></div></div>{!jadwalDateValid ? <div className="mt-5"><EmptyState message="Tanggal jadwal harus berada dalam periode yang dipilih." /></div> : periodLoading ? <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 3 }).map((_, index) => <div key={index} className="h-40 animate-pulse rounded-xl bg-muted" />)}</div> : periodError ? <p className="mt-5 text-sm text-destructive">{periodError}</p> : jadwal.length === 0 ? <div className="mt-5"><EmptyState message="Belum ada jadwal untuk tanggal ini." hint="Jadwal mengikuti hari dalam minggu dari tanggal referensi." /></div> : <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{jadwal.map((item) => <ScheduleItem key={item.id} item={item} santriCount={santriPerSesi[item.sesi?.id ?? ""] ?? 0} />)}</div>}</section>
   </div>
 }
 
 function CompositionItem({ label, value, pct, tone }: { label: string; value: number; pct: number; tone: "emerald" | "indigo" }) { return <div className={`rounded-xl border p-4 ${tone === "emerald" ? "border-emerald-200/70 bg-emerald-50/60" : "border-indigo-200/70 bg-indigo-50/60"}`}><p className={`text-xs font-medium uppercase tracking-wider ${tone === "emerald" ? "text-emerald-700" : "text-indigo-700"}`}>{label}</p><p className="mt-2 text-2xl font-semibold text-foreground">{value}</p><p className="mt-1 text-xs text-muted-foreground">{pct}% dari Santri aktif</p></div> }
 function StatusItem({ label, value, icon: Icon, tone }: { label: string; value: number; icon: typeof Activity; tone: string }) { return <div className={`rounded-xl p-3 ${tone}`}><Icon className="h-4 w-4" /><p className="mt-3 text-2xl font-semibold">{value}</p><p className="mt-1 text-xs font-medium">{label}</p></div> }
-function ScheduleItem({ item, santriCount }: { item: JadwalRow; santriCount: number }) { const sesi = item.kelompok?.sesi?.nama ?? ""; return <article className="rounded-xl border border-border/70 bg-muted/[0.18] p-4 transition-colors hover:bg-muted/40"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{sesi === "PAGI" ? "Sesi Pagi" : sesi === "SORE" ? "Sesi Sore" : "Sesi"}</p><p className="mt-1 text-lg font-semibold text-foreground">Kelompok {item.kelompok?.nama ?? "-"}</p></div><Badge variant="outline" className="shrink-0">{SESI_JAM[sesi] ?? "-"}</Badge></div><div className="mt-4 space-y-2 border-t border-border/70 pt-3 text-sm"><div className="flex items-center gap-2 text-muted-foreground"><GraduationCap className="h-4 w-4" /><span>{item.kelompok?.pengajar?.nama ?? "Pengajar belum ditugaskan"}</span></div><div className="flex items-center gap-2 text-muted-foreground"><Users className="h-4 w-4" /><span>{santriCount} Santri aktif dalam kelompok</span></div></div></article> }
+function ScheduleItem({ item, santriCount }: { item: JadwalRow; santriCount: number }) { const sesi = item.sesi?.nama ?? ""; return <article className="rounded-xl border border-border/70 bg-muted/[0.18] p-4 transition-colors hover:bg-muted/40"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{sesi === "PAGI" ? "Sesi Pagi" : sesi === "SORE" ? "Sesi Sore" : "Sesi"}</p><p className="mt-1 text-lg font-semibold text-foreground">Iqra & Al-Qur&apos;an</p></div><Badge variant="outline" className="shrink-0">{SESI_JAM[sesi] ?? "-"}</Badge></div><div className="mt-4 space-y-2 border-t border-border/70 pt-3 text-sm"><div className="flex items-center gap-2 text-muted-foreground"><GraduationCap className="h-4 w-4" /><span>{item.sesi?.pengajar?.nama ?? "Pengajar belum ditugaskan"}</span></div><div className="flex items-center gap-2 text-muted-foreground"><Users className="h-4 w-4" /><span>{santriCount} Santri aktif dalam sesi</span></div></div></article> }
