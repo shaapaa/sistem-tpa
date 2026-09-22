@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Users, Search } from "lucide-react"
+import { Plus, Pencil, Trash2, Users, Search, CalendarCheck, GraduationCap } from "lucide-react"
 import { formatGender, urutkanJadwalMenurutHari } from "@/lib/format"
 import { PageHeader } from "@/components/layout/page-header"
 import { FilterBar } from "@/components/layout/filter-bar"
@@ -130,6 +130,8 @@ export default function PengajarPage() {
     p.nama.toLowerCase().includes(search.toLowerCase()) ||
     p.profiles?.nama?.toLowerCase().includes(search.toLowerCase())
   )
+  const pengajarDenganAkun = pengajars.filter((pengajar) => Boolean(pengajar.profiles)).length
+  const pengajarTerjadwal = new Set(jadwals.map((jadwal) => jadwal.pengajar_id)).size
 
   return (
     <div className="space-y-6">
@@ -137,7 +139,13 @@ export default function PengajarPage() {
           <Plus className="mr-2 h-4 w-4" /> Tambah Pengajar
         </Button>} />
 
-      <FilterBar><div className="relative w-full sm:max-w-sm">
+      <section className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-primary/20 bg-card p-3 shadow-sm sm:p-4"><span className="inline-flex rounded-lg bg-primary p-1.5 text-primary-foreground"><GraduationCap className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{pengajars.length}</p><p className="text-xs font-medium text-muted-foreground">Total pengajar</p></div>
+        <div className="rounded-xl border border-primary/20 bg-card p-3 shadow-sm sm:p-4"><span className="inline-flex rounded-lg bg-primary/10 p-1.5 text-primary"><Users className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{pengajarDenganAkun}</p><p className="text-xs font-medium text-muted-foreground">Sudah berakun</p></div>
+        <div className="rounded-xl border border-primary/20 bg-card p-3 shadow-sm sm:p-4"><span className="inline-flex rounded-lg bg-primary/10 p-1.5 text-primary"><CalendarCheck className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{pengajarTerjadwal}</p><p className="text-xs font-medium text-muted-foreground">Ada jadwal</p></div>
+      </section>
+
+      <div className="rounded-xl border border-border bg-card p-3 shadow-sm"><FilterBar><div className="relative w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Cari nama..."
@@ -146,7 +154,7 @@ export default function PengajarPage() {
           className="pl-9 h-9"
         />
       </div>
-      </FilterBar>
+      </FilterBar></div>
 
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -160,14 +168,15 @@ export default function PengajarPage() {
           <p className="text-sm text-muted-foreground">Tidak ada pengajar ditemukan</p>
         </div>
       ) : (
-        <div className="grid gap-px overflow-hidden rounded-xl border border-border/70 bg-border/50 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((p) => (
             <Card
               key={p.id}
-              className="rounded-none border-0 bg-card cursor-pointer group transition-colors hover:bg-primary/[0.025]"
+              className="relative cursor-pointer border border-primary/20 bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.025] hover:shadow-md"
               onClick={() => openEdit(p)}
             >
-              <CardContent className="pt-4 pb-4">
+              <span className="absolute inset-x-0 top-0 h-1 bg-primary" />
+              <CardContent className="relative p-4 pt-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary text-sm font-semibold">
                     {p.nama.charAt(0)}
@@ -190,7 +199,7 @@ export default function PengajarPage() {
                 <h3 className="font-semibold text-foreground mb-1">{p.nama}</h3>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   <Badge variant="secondary" className="text-[10px]">{formatGender(p.jenis_kelamin)}</Badge>
-                  <Badge variant="outline" className="text-[10px]">{p.profiles?.nama ?? "tanpa akun"}</Badge>
+                  <Badge className={`border-0 text-[10px] ${p.profiles?.nama ? "bg-sky-100 text-sky-800 hover:bg-sky-100" : "bg-amber-100 text-amber-800 hover:bg-amber-100"}`}>{p.profiles?.nama ?? "tanpa akun"}</Badge>
                 </div>
                 {p.no_hp && <p className="text-xs text-muted-foreground">{p.no_hp}</p>}
                 {p.alamat && <p className="text-xs text-muted-foreground mt-0.5">{p.alamat}</p>}

@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Pencil, Trash2, Search, Eye, EyeOff } from "lucide-react"
+import { Plus, Pencil, Trash2, Search, Eye, EyeOff, ShieldCheck, UserCheck, UserX } from "lucide-react"
 import { formatRole } from "@/lib/format"
 import { PageHeader } from "@/components/layout/page-header"
 import { FilterBar } from "@/components/layout/filter-bar"
@@ -252,12 +252,21 @@ export default function UsersPage() {
   const linkedPengajarIds = pengajars.filter((p) => p.profile_id).map((p) => p.id)
   const availablePengajars = pengajars.filter((p) => !linkedPengajarIds.includes(p.id))
   const selectablePengajars = pengajars.filter((p) => !p.profile_id || p.id === form.pengajar_id)
+  const activeProfiles = profiles.filter((profile) => profile.is_active !== false).length
+  const inactiveProfiles = profiles.length - activeProfiles
+  const adminProfiles = profiles.filter((profile) => profile.role === "ADMIN").length
 
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Akses sistem" title="Profil & Akun" description="Lihat akun sistem dan kelola status aksesnya." action={<Button onClick={openAdd} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Admin
         </Button>} />
+
+      <section className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-primary/20 bg-card p-3 shadow-sm sm:p-4"><span className="inline-flex rounded-lg bg-primary p-1.5 text-primary-foreground"><UserCheck className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{activeProfiles}</p><p className="text-xs font-medium text-muted-foreground">Akun aktif</p></div>
+        <div className="rounded-xl border border-primary/20 bg-card p-3 shadow-sm sm:p-4"><span className="inline-flex rounded-lg bg-primary/10 p-1.5 text-primary"><ShieldCheck className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{adminProfiles}</p><p className="text-xs font-medium text-muted-foreground">Administrator</p></div>
+        <div className="rounded-xl border border-primary/20 bg-card p-3 shadow-sm sm:p-4"><span className="inline-flex rounded-lg bg-muted p-1.5 text-muted-foreground"><UserX className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{inactiveProfiles}</p><p className="text-xs font-medium text-muted-foreground">Nonaktif</p></div>
+      </section>
 
       <FilterBar><div className="relative w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -270,7 +279,7 @@ export default function UsersPage() {
       </div>
       </FilterBar>
 
-      <Card className="surface-panel overflow-x-auto">
+      <Card className="surface-panel overflow-x-auto shadow-sm">
         {loading ? (
           <div className="p-4">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -299,7 +308,7 @@ export default function UsersPage() {
               ) : (
                 filtered.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell className="font-medium">{p.nama}</TableCell>
+                    <TableCell><div className="flex items-center gap-3"><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${p.role === "ADMIN" ? "bg-sky-100 text-sky-700" : p.role === "PENGAJAR" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{p.nama.charAt(0)}</span><span className="font-medium">{p.nama}</span></div></TableCell>
                     <TableCell>
                       <Badge variant="outline">{formatRole(p.role)}</Badge>
                     </TableCell>

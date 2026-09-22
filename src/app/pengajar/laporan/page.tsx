@@ -266,7 +266,7 @@ tables: [
     <div className="space-y-6">
       <PageHeader eyebrow="Laporan santri" title="Laporan Perkembangan Santri" description="Buat dan lihat laporan perkembangan santri berdasarkan periode pembelajaran." backHref="/pengajar" action={<Button onClick={handlePrint} className="h-9 px-4" disabled={!reportReady || noData}><Download className="mr-2 h-4 w-4" /> Cetak PDF</Button>} />
 
-      <div className="surface-panel p-4 sm:p-5">
+      <div className="teacher-panel-teal p-4 pt-5 sm:p-5">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
             <Label className="text-[10px] text-muted-foreground">Santri</Label>
@@ -335,10 +335,10 @@ tables: [
           )}
 
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <StatCard label="Kehadiran" value={`${hadir}/${totalPres}`} detail={`${rate}% kehadiran`} icon={CalendarDays} className="bg-gradient-to-br from-emerald-500 to-teal-700" />
-            <StatCard label="Bacaan" value={BAC_STATUS[bacaanLatest?.status ?? ""] ?? "-"} detail={bacaanLatest ? bacaanDetail(bacaanLatest) : "belum ada catatan"} icon={FileText} className="bg-gradient-to-br from-amber-400 to-orange-600" />
-            <StatCard label="Hafalan" value={`${suratTuntas} tuntas`} detail={`${suratSedang} sedang dihafal · ${TARGET_SURAT} target`} icon={BookMarked} className="bg-gradient-to-br from-indigo-500 to-violet-700" />
-            <StatCard label="Praktik Salat" value={`${salatLancar} Lancar`} detail={`${salatBimbingan} Butuh Bimbingan`} icon={Moon} className="bg-gradient-to-br from-sky-500 to-blue-700" />
+            <StatCard label="Kehadiran" value={`${hadir}/${totalPres}`} detail={`${rate}% kehadiran`} icon={CalendarDays} className="border-emerald-200 bg-emerald-50/80 text-emerald-900" />
+            <StatCard label="Bacaan" value={BAC_STATUS[bacaanLatest?.status ?? ""] ?? "-"} detail={bacaanLatest ? bacaanDetail(bacaanLatest) : "belum ada catatan"} icon={FileText} className="border-amber-200 bg-amber-50/80 text-amber-900" />
+            <StatCard label="Hafalan" value={`${suratTuntas} tuntas`} detail={`${suratSedang} sedang dihafal · ${TARGET_SURAT} target`} icon={BookMarked} className="border-violet-200 bg-violet-50/80 text-violet-900" />
+            <StatCard label="Praktik Salat" value={`${salatLancar} Lancar`} detail={`${salatBimbingan} Butuh Bimbingan`} icon={Moon} className="border-sky-200 bg-sky-50/80 text-sky-900" />
           </div>
 
           <section className="surface-panel p-5 sm:p-6">
@@ -561,11 +561,11 @@ tables: [
           <section className="surface-panel p-5 sm:p-6">
             <SectionHeader title="Kehadiran" description={`Rekap kehadiran pada periode ini (${totalPres} pertemuan)`} />
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              <StatCard label="Hadir" value={hadir} icon={CalendarCheck} className="bg-gradient-to-br from-emerald-500 to-teal-700" />
-              <StatCard label="Sakit" value={sakit} icon={Activity} className="bg-gradient-to-br from-orange-400 to-red-500" />
-              <StatCard label="Izin" value={izin} icon={CalendarX} className="bg-gradient-to-br from-amber-400 to-orange-600" />
-              <StatCard label="Alpa" value={alpa} icon={UserX} className="bg-gradient-to-br from-rose-500 to-red-600" />
-              <StatCard label="Persentase" value={`${rate}%`} icon={TrendingUp} className="bg-gradient-to-br from-sky-500 to-blue-700" />
+              <StatCard label="Hadir" value={hadir} icon={CalendarCheck} className="border-emerald-200 bg-emerald-50/80 text-emerald-900" />
+              <StatCard label="Sakit" value={sakit} icon={Activity} className="border-orange-200 bg-orange-50/80 text-orange-900" />
+              <StatCard label="Izin" value={izin} icon={CalendarX} className="border-amber-200 bg-amber-50/80 text-amber-900" />
+              <StatCard label="Alpa" value={alpa} icon={UserX} className="border-rose-200 bg-rose-50/80 text-rose-900" />
+              <StatCard label="Persentase" value={`${rate}%`} icon={TrendingUp} className="border-sky-200 bg-sky-50/80 text-sky-900" />
             </div>
             <div className="mt-4 overflow-x-auto">
               {presensis.length === 0 ? <p className="text-sm text-muted-foreground">Belum ada presensi pada periode ini</p> : (

@@ -132,7 +132,7 @@ export default function PresensiPage() {
     <div className="space-y-6">
       <PageHeader eyebrow="Kehadiran" title="Presensi hari ini" description="Santri Iqra dan Al-Qur'an pada sesi yang dijadwalkan untuk Anda hari ini." backHref="/pengajar" />
 
-      <Card className="card-elevated overflow-visible">
+      <Card className="teacher-panel-sky overflow-visible">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div><CardTitle className="text-sm font-medium">Presensi Santri</CardTitle><p className="mt-1 text-xs text-muted-foreground">{jadwalHariIni.length === 0 ? "Belum ada sesi mengajar hari ini" : jadwalHariIni.map((jadwal) => { const pengajars = (jadwal.jadwal_sesi_pengajar ?? []).map((item) => item.pengajar?.nama).filter(Boolean).join(" · "); return `${jadwal.sesi?.nama === "PAGI" ? "Sesi Pagi" : jadwal.sesi?.nama === "SORE" ? "Sesi Sore" : "Sesi"} · ${jadwal.jam_mulai.slice(0, 5)}–${jadwal.jam_selesai.slice(0, 5)}${pengajars ? ` · Pengajar: ${pengajars}` : ""}` }).join(" | ")}</p></div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">

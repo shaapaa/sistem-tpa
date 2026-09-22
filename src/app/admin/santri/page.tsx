@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Users, Search, Eye } from "lucide-react"
+import { Plus, Pencil, Trash2, Users, Search, Eye, BookOpen, GraduationCap } from "lucide-react"
 import { formatGender, formatDate } from "@/lib/format"
 import { PageHeader } from "@/components/layout/page-header"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -219,6 +219,11 @@ export default function SantriPage() {
     const matchStatus = statusFilter === "ALL" ? true : statusFilter === "AKTIF" ? s.is_active !== false : s.is_active === false
     return matchText && matchStatus
   })
+  const summary = useMemo(() => ({
+    aktif: santris.filter((s) => s.is_active !== false).length,
+    iqra: santris.filter((s) => s.is_active !== false && s.keterangan === "IQRA").length,
+    quran: santris.filter((s) => s.is_active !== false && s.keterangan === "QURAN").length,
+  }), [santris])
 
   return (
     <div className="space-y-6">
@@ -226,6 +231,13 @@ export default function SantriPage() {
           <Plus className="mr-2 h-4 w-4" /> Tambah Santri
         </Button>} />
 
+      <section className="grid grid-cols-3 gap-3">
+        <SummaryCard label="Santri Aktif" value={summary.aktif} detail="mengikuti pembelajaran" icon={Users} tone="sky" />
+        <SummaryCard label="Kelompok A" value={summary.iqra} detail="pembelajaran Iqra" icon={BookOpen} tone="teal" />
+        <SummaryCard label="Kelompok B" value={summary.quran} detail="pembelajaran Al-Qur'an" icon={GraduationCap} tone="violet" />
+      </section>
+
+      <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
       <FilterBar>
       <div className="relative w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -240,6 +252,9 @@ export default function SantriPage() {
         </SelectContent>
       </Select>
       </FilterBar>
+      </div>
+
+      {!loading && filtered.length > 0 && <div className="flex items-end justify-between gap-3 border-b border-border/60 pb-3"><div><p className="text-sm font-semibold text-foreground">Daftar Santri</p><p className="mt-0.5 text-xs text-muted-foreground">Pilih kartu untuk mengubah data atau lihat rincian lengkap.</p></div><span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{filtered.length} data</span></div>}
 
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -251,12 +266,13 @@ export default function SantriPage() {
           <p className="text-sm text-muted-foreground">Tidak ada santri ditemukan</p>
         </div>
       ) : (
-        <div className="grid gap-px overflow-hidden rounded-xl border border-border/70 bg-border/50 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((s) => (
-            <Card key={s.id} className="rounded-none border-0 bg-card cursor-pointer group transition-colors hover:bg-primary/[0.025]" onClick={() => openEdit(s)}>
-              <CardContent className="pt-4 pb-4">
+            <Card key={s.id} className="relative cursor-pointer border border-primary/20 bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.025] hover:shadow-md" onClick={() => openEdit(s)}>
+              <span className="absolute inset-x-0 top-0 h-1 bg-primary" />
+              <CardContent className="relative p-4 pt-5">
                 <div className="flex items-start justify-between mb-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary text-sm font-semibold">{s.nama.charAt(0)}</div>
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${s.keterangan === "IQRA" ? "bg-teal-100 text-teal-700" : s.keterangan === "QURAN" ? "bg-violet-100 text-violet-700" : "bg-sky-100 text-sky-700"}`}>{s.nama.charAt(0)}</div>
                   <div className="flex gap-1">
                     <button onClick={(e) => { e.stopPropagation(); setDetail(s); }} className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200" title="Detail">
                       <Eye className="h-4 w-4" />
@@ -269,15 +285,15 @@ export default function SantriPage() {
                     </button>
                   </div>
                 </div>
-                <h3 className="font-semibold text-foreground mb-1">{s.nama}</h3>
+                <h3 className="font-semibold text-foreground mb-0.5">{s.nama}</h3>
+                <p className="mb-3 text-xs text-muted-foreground">{s.kelompok ? kelompokLabel(s.kelompok) : "Kelompok belum ditentukan"}</p>
                 <div className="flex flex-wrap gap-1.5 mb-2">
-                  {s.kelompok && <Badge variant="outline" className="text-[10px]">{kelompokLabel(s.kelompok)}</Badge>}
-                  <Badge variant="secondary" className="text-[10px]">{s.keterangan === "IQRA" ? "Iqra" : s.keterangan === "QURAN" ? "Al-Quran" : "-"}</Badge>
+                  <Badge className={`border-0 text-[10px] ${s.keterangan === "IQRA" ? "bg-teal-100 text-teal-800 hover:bg-teal-100" : s.keterangan === "QURAN" ? "bg-violet-100 text-violet-800 hover:bg-violet-100" : "bg-sky-100 text-sky-800 hover:bg-sky-100"}`}>{s.keterangan === "IQRA" ? "Iqra · Kelompok A" : s.keterangan === "QURAN" ? "Al-Qur'an · Kelompok B" : "Belum diklasifikasi"}</Badge>
                   <Badge variant="secondary" className="text-[10px]">{formatGender(s.jenis_kelamin)}</Badge>
                   {s.is_active === false && <Badge variant="destructive" className="text-[10px]">Non-aktif</Badge>}
                 </div>
                 {(s.nama_ayah || s.nama_ibu) && (
-                  <p className="text-xs text-muted-foreground">Wali: {s.nama_ayah ?? "-"} / {s.nama_ibu ?? "-"}</p>
+                  <div className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground"><span className="font-medium text-foreground/80">Wali</span> · {s.nama_ayah ?? s.nama_ibu ?? "-"}</div>
                 )}
               </CardContent>
             </Card>
@@ -463,4 +479,9 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="font-medium text-foreground">{value}</p>
     </div>
   )
+}
+
+function SummaryCard({ label, value, detail, icon: Icon, tone }: { label: string; value: number; detail: string; icon: typeof Users; tone: "sky" | "teal" | "violet" }) {
+  const styles = tone === "sky" ? "border-sky-200 bg-sky-50/80 text-sky-900" : tone === "teal" ? "border-teal-200 bg-teal-50/80 text-teal-900" : "border-violet-200 bg-violet-50/80 text-violet-900"
+  return <div className={`relative overflow-hidden rounded-xl border p-3 shadow-sm sm:p-4 ${styles}`}><Icon className="absolute -bottom-3 -right-3 h-14 w-14 text-current/10" /><div className="relative"><span className="inline-flex rounded-lg bg-current/15 p-1.5"><Icon className="h-4 w-4" /></span><p className="mt-2 text-xl font-semibold tracking-[-0.04em] sm:text-2xl">{value}</p><p className="mt-0.5 text-[11px] font-medium sm:text-xs">{label}</p><p className="mt-0.5 hidden text-[10px] text-current/70 sm:block">{detail}</p></div></div>
 }

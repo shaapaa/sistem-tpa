@@ -143,7 +143,7 @@ export default function RekapPerkembanganPage() {
     <div className="space-y-6">
       <PageHeader eyebrow="Riwayat" title="Rekap perkembangan" description="Timeline bacaan, hafalan, dan praktik salat santri." backHref="/pengajar" />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="teacher-panel-teal grid gap-4 p-4 pt-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2">
           <Label>Kelompok</Label>
           <Select value={selectedKelompok} onValueChange={(v) => setSelectedKelompok(v ?? "")} items={kelompoks.map((k) => ({ label: `Kelompok ${k.nama}`, value: k.id }))}>
@@ -185,7 +185,7 @@ export default function RekapPerkembanganPage() {
         </div>
       </div>
 
-      <Card className="card-elevated">
+      <Card className="teacher-panel-violet">
         <CardHeader>
           <CardTitle className="text-sm font-medium">Riwayat Perkembangan ({items.length})</CardTitle>
         </CardHeader>

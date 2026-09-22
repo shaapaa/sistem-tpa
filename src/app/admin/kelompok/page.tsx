@@ -117,7 +117,7 @@ export default function KelompokPage() {
           {sesis.map((sesi) => {
             const items = kelompoks.filter((k) => k.sesi_id === sesi.id)
             return (
-              <section key={sesi.id} className="surface-panel min-w-0 p-5">
+              <section key={sesi.id} className="surface-panel min-w-0 border-l-4 border-l-teal-500 p-5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <SectionHeader title={`Sesi ${SESI_LABEL[sesi.nama] ?? sesi.nama}`} description={`${items.length} kelompok`} />
                   <Button variant="outline" size="sm" onClick={() => openAdd(sesi.id)} className="h-8 px-3">
@@ -129,10 +129,10 @@ export default function KelompokPage() {
                     <p className="text-sm text-muted-foreground">Belum ada kelompok pada sesi ini</p>
                   ) : (
                     items.map((k) => (
-                      <Card key={k.id} className="card-elevated">
+                      <Card key={k.id} className="card-elevated border border-primary/20 bg-card shadow-sm">
                         <CardContent className="flex items-center justify-between p-4">
                           <div className="flex items-center gap-3">
-                            <div className="rounded-lg bg-primary/10 p-2 text-primary"><BookOpen className="h-4 w-4" /></div>
+                            <div className={`rounded-lg p-2 ${k.nama === "A" ? "bg-teal-100 text-teal-700" : "bg-violet-100 text-violet-700"}`}><BookOpen className="h-4 w-4" /></div>
                             <div>
                               <p className="font-medium text-foreground">Kelompok {k.nama} <span className="text-xs text-muted-foreground">({k.nama === "A" ? "Iqra" : "Al-Qur'an"})</span></p>
                               <p className="text-xs text-muted-foreground">Materi {k.nama === "A" ? "Iqra" : "Al-Qur'an"}</p>

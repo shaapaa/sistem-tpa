@@ -12,7 +12,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Save, BookOpen, BookMarked, Moon, CheckCircle, ArrowLeft } from "lucide-react";
+import { Save, BookOpen, BookMarked, Moon, CheckCircle, ArrowLeft, Search, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { todayJakarta } from "@/lib/islamic-date";
 
@@ -659,9 +659,11 @@ export default function PerkembanganPage() {
     <div className="space-y-6">
       <PageHeader eyebrow="Catatan belajar" title="Input perkembangan" description="Catat bacaan, hafalan, dan praktik salat santri." backHref="/pengajar" />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <section className="teacher-panel-sky p-4 pt-5 sm:p-5">
+        <div className="mb-4 flex items-center gap-3 border-b border-border/60 pb-3"><span className="rounded-lg bg-primary/10 p-2 text-primary"><Users className="h-4 w-4" /></span><div><p className="text-sm font-semibold text-foreground">Pilih santri</p><p className="text-xs text-muted-foreground">Tentukan sesi, lalu cari santri yang akan dicatat perkembangannya.</p></div></div>
+        <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Sesi belajar</Label>
+          <Label className="text-xs font-medium text-muted-foreground">Sesi belajar</Label>
           {loadingKelompoks ? (
             <div className="h-9 animate-pulse rounded-md bg-muted" />
           ) : kelompokError ? (
@@ -678,19 +680,21 @@ export default function PerkembanganPage() {
           )}
         </div>
         <div className="space-y-2">
-          <Label>Santri dalam sesi ({santris.length})</Label>
+          <Label className="text-xs font-medium text-muted-foreground">Santri dalam sesi ({santris.length})</Label>
           {loadingSantris ? (
             <div className="h-9 animate-pulse rounded-md bg-muted" />
           ) : santriError ? (
             <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{santriError}</p>
           ) : (
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-3" placeholder="Cari nama santri..." disabled={!selectedSesi || kelompoks.length === 0} />
+            <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-9" placeholder="Cari nama santri..." disabled={!selectedSesi || kelompoks.length === 0} /></div>
           )}
         </div>
-      </div>
+        </div>
+      </section>
 
       {selectedSesi && !selectedSantri && !loadingSantris && !santriError && (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="teacher-panel-sky">
+          <div className="flex items-center justify-between border-b border-primary/15 px-4 py-3"><p className="text-sm font-medium text-foreground">Santri tersedia</p><span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{filteredSantris.length} santri</span></div>
           <div className="max-h-72 overflow-y-auto">
             {filteredSantris.length === 0 ? (
               <div className="p-5 text-center text-sm text-muted-foreground sm:p-8">
@@ -701,13 +705,13 @@ export default function PerkembanganPage() {
                 <button
                   key={s.id}
                   onClick={() => handleSelectSantri(s.id)}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-muted/50 transition-colors border-b border-border/40 last:border-0"
+                  className="flex w-full items-center gap-3 border-b border-border/60 px-4 py-3 text-left text-sm transition-colors last:border-0 hover:bg-primary/5"
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary text-xs font-semibold">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary text-xs font-semibold">
                     {s.nama.charAt(0)}
                   </span>
                   <span className="font-medium text-foreground">{s.nama}</span>
-                  <span className="ml-auto text-xs text-muted-foreground">Kelompok {s.kelompok?.nama ?? "-"}</span>
+                  <span className="ml-auto rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">Kelompok {s.kelompok?.nama ?? "-"}</span>
                 </button>
               ))
             )}
@@ -717,9 +721,9 @@ export default function PerkembanganPage() {
 
       {selectedSantri ? (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <div className="teacher-panel-teal flex flex-wrap items-center justify-between gap-3 px-4 py-3 pt-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-100 text-sm font-semibold text-teal-700">
                 {(santris.find((s) => s.id === selectedSantri)?.nama ?? "?").charAt(0)}
               </div>
               <div>
@@ -733,7 +737,7 @@ export default function PerkembanganPage() {
             </Button>
           </div>
           {penilaianHariIni.bacaan && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-sm text-muted-foreground"><Badge variant="secondary">Bacaan sudah dinilai</Badge><span>{penilaianHariIni.pencatatBacaan ? `Dicatat oleh ${penilaianHariIni.pencatatBacaan}` : "Dicatat oleh pengajar sesi"}</span></div>}
-          <Tabs defaultValue="bacaan" className="w-full">
+          <Tabs defaultValue="bacaan" className="rounded-xl border border-primary/20 bg-card p-3 shadow-sm sm:p-4">
           <TabsList className="grid min-h-12 h-auto w-full grid-cols-3">
             <TabsTrigger value="bacaan" className="gap-1 px-1 text-xs sm:text-sm"><BookOpen className="h-4 w-4" /> Bacaan</TabsTrigger>
             <TabsTrigger value="hafalan" className="gap-1 px-1 text-xs sm:text-sm"><BookMarked className="h-4 w-4" /> Hafalan</TabsTrigger>
@@ -741,7 +745,7 @@ export default function PerkembanganPage() {
           </TabsList>
 
           <TabsContent value="bacaan" className="space-y-4 pt-4">
-            <Card className="card-elevated">
+            <Card className="teacher-panel-amber">
               <CardHeader><CardTitle className="text-sm font-medium">Perkembangan Bacaan</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/15 bg-primary/[0.04] px-3 py-2.5">
@@ -831,7 +835,7 @@ export default function PerkembanganPage() {
           </TabsContent>
 
           <TabsContent value="hafalan" className="space-y-4 pt-4">
-            <Card className="card-elevated">
+            <Card className="teacher-panel-violet">
               <CardHeader><CardTitle className="text-sm font-medium">Perkembangan Hafalan</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -971,7 +975,7 @@ export default function PerkembanganPage() {
               <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Master Praktik Salat belum lengkap. Hubungi Admin untuk memeriksa delapan komponen dan jenis salat aktif.</p>
             ) : (
               <div className="grid gap-4 xl:grid-cols-2">
-                <Card className="card-elevated">
+                <Card className="teacher-panel-sky">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium">Gerakan Salat</CardTitle>
 
@@ -1020,7 +1024,7 @@ export default function PerkembanganPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="card-elevated">
+                <Card className="teacher-panel-teal">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium">Niat Salat</CardTitle>
                     <p className="text-sm text-muted-foreground">Nilai niat secara terpisah untuk setiap jenis salat.</p>

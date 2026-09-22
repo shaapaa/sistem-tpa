@@ -8,6 +8,7 @@ import Link from "next/link";
 import { formatHari, formatTime, urutkanJadwalMenurutHari } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 import { SectionHeader } from "@/components/layout/section-header";
+import { StatCard } from "@/components/layout/stat-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -185,7 +186,7 @@ export default function PengajarDashboard() {
           <div className="xl:ml-auto">
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Akses cepat</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {[{ href: "/pengajar/presensi", label: "Presensi", icon: ClipboardCheck }, { href: "/pengajar/perkembangan", label: "Perkembangan", icon: TrendingUp }, { href: "/pengajar/jadwal", label: "Jadwal", icon: Calendar }, { href: "/pengajar/rekap-perkembangan", label: "Rekap", icon: ListChecks }, { href: "/pengajar/laporan", label: "Laporan", icon: FileText }].map((item) => <Link key={item.href} href={item.href} className="flex min-h-9 items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-all hover:border-primary/35 hover:shadow-sm"><span className="rounded-md bg-primary/10 p-1 text-primary"><item.icon className="h-3.5 w-3.5 shrink-0" /></span>{item.label}</Link>)}
+              {[{ href: "/pengajar/presensi", label: "Presensi", icon: ClipboardCheck }, { href: "/pengajar/perkembangan", label: "Perkembangan", icon: TrendingUp }, { href: "/pengajar/jadwal", label: "Jadwal", icon: Calendar }, { href: "/pengajar/rekap-perkembangan", label: "Rekap", icon: ListChecks }, { href: "/pengajar/laporan", label: "Laporan", icon: FileText }].map((item) => <Link key={item.href} href={item.href} className="flex min-h-9 min-w-0 items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-all hover:border-primary/35 hover:shadow-sm"><span className="shrink-0 rounded-md bg-primary/10 p-1 text-primary"><item.icon className="h-3.5 w-3.5" /></span><span className="min-w-0 truncate">{item.label}</span></Link>)}
             </div>
           </div>
         </div>
@@ -199,19 +200,19 @@ export default function PengajarDashboard() {
       <section>
         <SectionHeader title="Ringkasan kerja" description={`Periode: ${periodLabel(period)}`} />
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Link href="/pengajar/perkembangan" className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm transition-all hover:bg-emerald-100/80 hover:shadow-md"><span className="inline-flex rounded-lg bg-emerald-600 p-2 text-white"><Users className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-emerald-950">{santriCount}</p><p className="text-sm font-medium text-emerald-900">Santri</p><p className="mt-1 text-xs text-emerald-800/75">dalam cakupan Anda</p></Link>
-          <Link href="/pengajar/rekap-perkembangan" className="rounded-xl border border-teal-200 bg-teal-50/80 p-4 shadow-sm transition-all hover:bg-teal-100/80 hover:shadow-md"><span className="inline-flex rounded-lg bg-teal-600 p-2 text-white"><TrendingUp className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-teal-950">{monthPerk}</p><p className="text-sm font-medium text-teal-900">Perkembangan</p><p className="mt-1 text-xs text-teal-800/75">catatan bulan ini</p></Link>
-          <Link href="/pengajar/presensi" className="rounded-xl border border-sky-200 bg-sky-50/80 p-4 shadow-sm transition-all hover:bg-sky-100/80 hover:shadow-md"><span className="inline-flex rounded-lg bg-sky-600 p-2 text-white"><CalendarCheck className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-sky-950">{attRate}%</p><p className="text-sm font-medium text-sky-900">Kehadiran</p><p className="mt-1 text-xs text-sky-800/75">{attendance.hadir} hadir dari {totalAtt}</p></Link>
-          <Link href="/pengajar/jadwal" className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm transition-all hover:bg-amber-100/80 hover:shadow-md"><span className="inline-flex rounded-lg bg-amber-500 p-2 text-white"><Calendar className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-amber-950">{jadwals.length}</p><p className="text-sm font-medium text-amber-900">Jadwal</p><p className="mt-1 text-xs text-amber-800/75">slot mengajar mingguan</p></Link>
+          <StatCard label="Santri" value={santriCount} detail="dalam cakupan Anda" icon={Users} className="border-emerald-200 bg-emerald-50/80 text-emerald-900 hover:bg-emerald-100/80" href="/pengajar/perkembangan" />
+          <StatCard label="Perkembangan" value={monthPerk} detail="catatan bulan ini" icon={TrendingUp} className="border-teal-200 bg-teal-50/80 text-teal-900 hover:bg-teal-100/80" href="/pengajar/rekap-perkembangan" />
+          <StatCard label="Kehadiran" value={`${attRate}%`} detail={`${attendance.hadir} hadir dari ${totalAtt}`} icon={CalendarCheck} className="border-sky-200 bg-sky-50/80 text-sky-900 hover:bg-sky-100/80" href="/pengajar/presensi" />
+          <StatCard label="Jadwal" value={jadwals.length} detail="slot mengajar mingguan" icon={Calendar} className="border-amber-200 bg-amber-50/80 text-amber-900 hover:bg-amber-100/80" href="/pengajar/jadwal" />
         </div>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="surface-panel border-l-4 border-l-primary p-5 shadow-sm sm:p-6">
+        <section className="teacher-panel-sky p-5 sm:p-6">
           <SectionHeader title="Kehadiran" description={`Ringkasan ${periodLabel(period).toLowerCase()}.`} actions={<Link href="/pengajar/presensi" className="action-link inline-flex items-center gap-1">Buka presensi <ArrowRight className="h-3.5 w-3.5" /></Link>} />
           {totalAtt ? <><div className="mt-4 flex items-end justify-between"><div><p className="text-2xl font-semibold text-foreground">{attRate}%</p><p className="text-xs text-muted-foreground">tingkat kehadiran</p></div><p className="text-sm text-muted-foreground">{attendance.hadir} dari {totalAtt} presensi</p></div><div className="mt-4 flex h-2 overflow-hidden rounded-full bg-muted"><div className="bg-emerald-500" style={{ width: `${(attendance.hadir / totalAtt) * 100}%` }} /><div className="bg-amber-400" style={{ width: `${(attendance.izin / totalAtt) * 100}%` }} /><div className="bg-orange-400" style={{ width: `${(attendance.sakit / totalAtt) * 100}%` }} /><div className="bg-rose-500" style={{ width: `${(attendance.alpha / totalAtt) * 100}%` }} /></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"><div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800"><span className="block text-emerald-700/70">Hadir</span><strong>{attendance.hadir}</strong></div><div className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800"><span className="block text-amber-700/70">Izin</span><strong>{attendance.izin}</strong></div><div className="rounded-lg bg-orange-50 px-3 py-2 text-orange-800"><span className="block text-orange-700/70">Sakit</span><strong>{attendance.sakit}</strong></div><div className="rounded-lg bg-rose-50 px-3 py-2 text-rose-800"><span className="block text-rose-700/70">Alpha</span><strong>{attendance.alpha}</strong></div></div></> : <div className="mt-4 rounded-lg bg-muted/50 px-4 py-5 text-sm text-muted-foreground">Belum ada data kehadiran pada periode ini.</div>}
         </section>
-        <section className="surface-panel min-w-0 border-l-4 border-l-amber-400 p-5 shadow-sm sm:p-6">
+        <section className="teacher-panel-amber min-w-0 p-5 sm:p-6">
           <SectionHeader title="Anak yang butuh perhatian" description="Penilaian kurang atau kehadiran yang perlu ditindaklanjuti." actions={<Link href="/pengajar/perkembangan" className="action-link inline-flex items-center gap-1">Input perkembangan <ArrowRight className="h-3.5 w-3.5" /></Link>} />
           {attention.length === 0 ? (
             <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><ClipboardList className="h-4 w-4" /> Semua santri dalam kondisi baik</div>
@@ -234,22 +235,25 @@ export default function PengajarDashboard() {
         </section>
       </div>
 
-      <section>
+      <section className="teacher-panel-sky p-5 sm:p-6">
         <SectionHeader title="Jadwal mengajar" description="Hari dan jam mengajar Anda." actions={<Link href="/pengajar/jadwal" className="action-link inline-flex items-center gap-1">Lihat semua <ArrowRight className="h-3.5 w-3.5" /></Link>} />
         {jadwals.length === 0 ? (
           <div className="surface-inset mt-4 p-5 text-center sm:p-8"><Calendar className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" /><p className="text-sm text-muted-foreground">Belum ada jadwal sesi yang ditugaskan kepada Anda.</p></div>
         ) : (
           <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
             {jadwals.map((j) => (
-              <div key={j.id} className="rounded-xl border border-border bg-card p-3 shadow-sm transition-all hover:border-primary/35 hover:shadow-md sm:p-4">
+              <div key={j.id} className="relative overflow-hidden rounded-xl border border-primary/20 bg-card p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md sm:p-4">
+                <span className="absolute inset-x-0 top-0 h-1 bg-primary" />
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Calendar className="h-4 w-4" /></div>
-                  <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">{formatHari(j.hari)}</span>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><Calendar className="h-4 w-4" /></div>
+                  <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{formatHari(j.hari)}</span>
                 </div>
-                <div className="mt-4">
-                  <div className="text-sm font-medium text-foreground">{j.sesi?.nama === "PAGI" ? "Sesi Pagi" : j.sesi?.nama === "SORE" ? "Sesi Sore" : "Sesi"}</div>
-                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" /><span className="font-tabular">{formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}</span></div>
+                <div className="mt-5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Sesi mengajar</p>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{j.sesi?.nama === "PAGI" ? "Sesi Pagi" : j.sesi?.nama === "SORE" ? "Sesi Sore" : "Sesi"}</div>
+                  <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary"><Clock className="h-3.5 w-3.5" /><span className="font-tabular">{formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}</span></div>
                 </div>
+                <p className="mt-4 border-t border-border/60 pt-3 text-[11px] text-muted-foreground">Kelompok A · Iqra &amp; Kelompok B · Al-Qur&apos;an</p>
               </div>
             ))}
           </div>

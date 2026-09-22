@@ -162,13 +162,13 @@
     @apply mx-auto max-w-[1280px] px-4 sm:px-7 lg:px-10;
   }
   .card-elevated {
-    @apply bg-card border border-border/70;
+    @apply overflow-hidden border border-primary/20 border-t-4 border-t-primary bg-card shadow-sm;
   }
   .card-elevated-hover {
     @apply transition-colors duration-200 hover:border-primary/35 hover:bg-primary/[0.025];
   }
   .surface-panel {
-    @apply rounded-xl border border-border/70 bg-card/70;
+    @apply overflow-hidden rounded-xl border border-primary/20 border-t-4 border-t-primary bg-card shadow-sm;
   }
   .surface-inset {
     @apply rounded-lg border border-border/60 bg-muted/35;
@@ -179,6 +179,29 @@
   .action-link {
     @apply text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
   }
+  .teacher-panel-sky {
+    @apply relative overflow-hidden rounded-xl border border-primary/20 bg-card shadow-sm;
+  }
+  .teacher-panel-teal {
+    @apply relative overflow-hidden rounded-xl border border-primary/20 bg-card shadow-sm;
+  }
+  .teacher-panel-violet {
+    @apply relative overflow-hidden rounded-xl border border-primary/20 bg-card shadow-sm;
+  }
+  .teacher-panel-amber {
+    @apply relative overflow-hidden rounded-xl border border-primary/20 bg-card shadow-sm;
+  }
+  .teacher-panel-sky::before,
+  .teacher-panel-teal::before,
+  .teacher-panel-violet::before,
+  .teacher-panel-amber::before {
+    content: "";
+    @apply absolute inset-x-0 top-0 h-1;
+  }
+  .teacher-panel-sky::before,
+  .teacher-panel-teal::before,
+  .teacher-panel-violet::before,
+  .teacher-panel-amber::before { @apply bg-primary; }
 }
 
 .safe-area-bottom {
