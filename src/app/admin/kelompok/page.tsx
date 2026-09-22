@@ -21,8 +21,6 @@ interface Kelompok {
   id: string
   sesi_id: string
   nama: string
-  pengajar_id: string | null
-  pengajar?: { nama: string } | null
 }
 
 const SESI_LABEL: Record<string, string> = { PAGI: "Pagi", SORE: "Sore" }
@@ -36,30 +34,33 @@ export default function KelompokPage() {
   const [confirmDel, setConfirmDel] = useState<Kelompok | null>(null)
   const [errorMsg, setErrorMsg] = useState("")
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ sesi_id: "", nama: "A", pengajar_id: "" })
+  const [form, setForm] = useState({ sesi_id: "", nama: "A" })
   const supabase = createClient()
 
   const fetchData = async () => {
     const [sesiRes, kelompokRes] = await Promise.all([
       supabase.from("sesi").select("id, nama").order("nama"),
-      supabase.from("kelompok").select("*, pengajar(nama)").order("sesi_id").order("nama"),
+      supabase.from("kelompok").select("id, sesi_id, nama").order("sesi_id").order("nama"),
     ])
     setSesis(sesiRes.data ?? [])
     setKelompoks(kelompokRes.data ?? [])
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchData() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   const openAdd = (sesiId: string) => {
     setEditing(null)
-    setForm({ sesi_id: sesiId, nama: "A", pengajar_id: "" })
+    setForm({ sesi_id: sesiId, nama: "A" })
     setDialogOpen(true)
   }
 
   const openEdit = (k: Kelompok) => {
     setEditing(k)
-    setForm({ sesi_id: k.sesi_id, nama: k.nama, pengajar_id: k.pengajar_id ?? "" })
+    setForm({ sesi_id: k.sesi_id, nama: k.nama })
     setDialogOpen(true)
   }
 

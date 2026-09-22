@@ -44,6 +44,13 @@ next-env.d.ts
 
 # playwright
 .playwright-mcp/
+e2e-report/
+e2e-results/
+test-results/
+e2e/.auth/
+
+# Supabase CLI local state
+supabase/.temp/
 
 # build artifacts
 build.log

@@ -1,18 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, BookHeart, AlertTriangle, CalendarCheck, CalendarX, Activity, UserX, TrendingUp } from "lucide-react";
-import { formatDateShort } from "@/lib/format";
+import { AlertTriangle, ArrowRight, BookOpen, BookHeart, CalendarCheck, CircleCheck, Moon, UserX } from "lucide-react";
+import { formatDateShort, formatTingkat } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 import { SectionHeader } from "@/components/layout/section-header";
-import { StatCard } from "@/components/layout/stat-card";
-import { IslamicBanner } from "@/components/layout/islamic-banner";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
 import { CapaianBar } from "@/components/layout/capaian-bar";
 
 const TARGET_SURAT = 38; // Juz 30 + Al-Fatihah
@@ -25,7 +23,8 @@ type PraktikRow = { id: string; tanggal: string; status: string | null; catatan:
 type KomponenRow = { id: string; tanggal: string; status: string | null; catatan: string | null; komponen_salat?: { nama: string } | null }
 type NiatSalatRow = { id: string; tanggal: string; status: string; catatan: string | null; jenis_salat?: { nama: string } | null }
 type GerakanSalatRow = { id: string; tanggal: string; catatan: string | null }
-type Santri = { id: string; nama: string; kelompok?: { nama: string; sesi?: { nama: string } | null; pengajar?: { nama: string } | null } | null }
+type GerakanSalatKomponenRow = { id: string; status: string; komponen_salat?: { nama: string } | null; perkembangan_gerakan_salat?: { tanggal: string; catatan: string | null } | null }
+type Santri = { id: string; nama: string; keterangan: string | null; kelompok?: { nama: string; sesi?: { nama: string } | null } | null }
 
 const STATUS_BADGE: Record<string, "success" | "warning" | "destructive"> = {
   LANCAR: "success",
@@ -39,7 +38,6 @@ const STATUS_LABEL: Record<string, string> = {
   TIDAK_LANCAR: "Tidak Lancar",
   BUTUH_BIMBINGAN: "Butuh Bimbingan",
 }
-const ATT_COLORS = ["#376b59", "#b58b4b", "#b85b4b", "#768078"]
 
 export default function OrangTuaDashboard() {
   const { user, profile } = useAuth();
@@ -53,6 +51,7 @@ export default function OrangTuaDashboard() {
   const [komponens, setKomponens] = useState<KomponenRow[]>([]);
   const [niatSalats, setNiatSalats] = useState<NiatSalatRow[]>([]);
   const [gerakanSalats, setGerakanSalats] = useState<GerakanSalatRow[]>([]);
+  const [gerakanSalatKomponens, setGerakanSalatKomponens] = useState<GerakanSalatKomponenRow[]>([]);
   const [totalDoaMaster, setTotalDoaMaster] = useState(0);
   const [jenisSalats, setJenisSalats] = useState<string[]>([]);
   const [period, setPeriod] = useState("month");
@@ -78,7 +77,7 @@ export default function OrangTuaDashboard() {
       setError(null);
       const { data, error } = await supabase
         .from("santri")
-        .select("id, nama, kelompok(nama, sesi(nama), pengajar(nama))")
+        .select("id, nama, keterangan, kelompok(nama, sesi(nama))")
         .order("nama");
       if (error) {
         setError("Data anak tidak dapat dimuat. Silakan coba lagi.");
@@ -106,6 +105,7 @@ export default function OrangTuaDashboard() {
         setKomponens([]);
         setNiatSalats([]);
         setGerakanSalats([]);
+        setGerakanSalatKomponens([]);
         setTotalDoaMaster(0);
         setJenisSalats([]);
         return;
@@ -120,7 +120,8 @@ export default function OrangTuaDashboard() {
       setKomponens([]);
       setNiatSalats([]);
       setGerakanSalats([]);
-      const [pr, ci, doa, ba, pk, ko, niat, gerakan, doaM, js] = await Promise.all([
+      setGerakanSalatKomponens([]);
+      const [pr, ci, doa, ba, pk, ko, niat, gerakan, gerakanKomponen, doaM, js] = await Promise.all([
         supabase.from("presensi").select("id, status, tanggal").eq("santri_id", activeSantriId),
         supabase.from("hafalan_surat_cicilan").select("id, tanggal, ayat_mulai, ayat_selesai, status, catatan, hafalan_santri(surat(nama, jumlah_ayat))").eq("hafalan_santri.santri_id", activeSantriId),
         supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama)").eq("santri_id", activeSantriId),
@@ -129,11 +130,12 @@ export default function OrangTuaDashboard() {
         supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, catatan, komponen_salat(nama)").eq("santri_id", activeSantriId),
         supabase.from("perkembangan_niat_salat").select("id, tanggal, status, catatan, jenis_salat(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("perkembangan_gerakan_salat").select("id, tanggal, catatan").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("perkembangan_gerakan_salat_komponen").select("id, status, komponen_salat(nama), perkembangan_gerakan_salat!inner(tanggal, catatan, santri_id)").eq("perkembangan_gerakan_salat.santri_id", activeSantriId),
         supabase.from("doa").select("id", { count: "exact", head: true }),
         supabase.from("jenis_salat").select("nama").eq("aktif", true),
       ]);
       if (cancelled) return;
-      const dashboardError = [pr, ci, doa, ba, pk, ko, niat, gerakan, doaM, js].find((result) => result.error)?.error;
+      const dashboardError = [pr, ci, doa, ba, pk, ko, niat, gerakan, gerakanKomponen, doaM, js].find((result) => result.error)?.error;
       if (dashboardError) {
         setError("Data dashboard tidak dapat dimuat. Silakan coba lagi.");
         setLoading(false);
@@ -147,6 +149,7 @@ export default function OrangTuaDashboard() {
       setKomponens((ko.data ?? []) as unknown as KomponenRow[])
       setNiatSalats((niat.data ?? []) as unknown as NiatSalatRow[])
       setGerakanSalats((gerakan.data ?? []) as unknown as GerakanSalatRow[])
+      setGerakanSalatKomponens((gerakanKomponen.data ?? []) as unknown as GerakanSalatKomponenRow[])
       setTotalDoaMaster(doaM.count ?? 0)
       setJenisSalats((js.data ?? []).map((x) => x.nama))
       setLoading(false);
@@ -160,17 +163,8 @@ export default function OrangTuaDashboard() {
   // --- Presensi (default bulan berjalan) ---
   const presensiPeriod = presensis.filter((a) => inPeriod(a.tanggal));
   const hadir = presensiPeriod.filter((a) => a.status === "HADIR").length;
-  const izin = presensiPeriod.filter((a) => a.status === "IZIN").length;
-  const sakit = presensiPeriod.filter((a) => a.status === "SAKIT").length;
-  const alpha = presensiPeriod.filter((a) => a.status === "ALPHA").length;
   const totalPres = presensiPeriod.length;
   const attendanceRate = totalPres > 0 ? Math.round((hadir / totalPres) * 100) : 0;
-  const attData = [
-    { name: "Hadir", value: hadir },
-    { name: "Izin", value: izin },
-    { name: "Sakit", value: sakit },
-    { name: "Alpha", value: alpha },
-  ].filter((d) => d.value > 0);
 
   // --- Bacaan terbaru ---
   const latestBacaan = [...bacaans].sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1))[0];
@@ -197,24 +191,7 @@ export default function OrangTuaDashboard() {
   });
   const suratGroups = [...bySurat.values()];
   const suratLulus = suratGroups.filter((g) => g.jumlah > 0 && g.max >= g.jumlah).length;
-  const latestSurat = [...suratGroups].sort((a, b) => (a.lastTanggal < b.lastTanggal ? 1 : -1))[0];
 
-  // Tren hafalan kumulatif jumlah surat (periode terpilih)
-  const trendMap = new Map<string, { jumlah: number; max: number }>();
-  const trend: { label: string; dimulai: number; tuntas: number }[] = [];
-  [...cicilans].filter((c) => inPeriod(c.tanggal) && c.hafalan_santri?.surat?.nama).sort((a, b) => (a.tanggal > b.tanggal ? 1 : -1)).forEach((c) => {
-    const nama = c.hafalan_santri?.surat?.nama as string;
-    const jumlah = c.hafalan_santri?.surat?.jumlah_ayat ?? 0;
-    const cur = trendMap.get(nama) ?? { jumlah, max: 0 };
-    cur.max = Math.max(cur.max, c.ayat_selesai ?? 0);
-    trendMap.set(nama, cur);
-    const label = new Date(c.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
-    const last = trend[trend.length - 1];
-    const dimulai = trendMap.size;
-    const tuntas = [...trendMap.values()].filter((s) => s.max >= s.jumlah).length;
-    if (last && last.label === label) { last.dimulai = dimulai; last.tuntas = tuntas; }
-    else trend.push({ label, dimulai, tuntas });
-  });
 
   // --- Hafalan doa ---
   const doaDihafal = new Set(doas.map((d) => d.doa?.nama).filter(Boolean)).size;
@@ -236,7 +213,6 @@ export default function OrangTuaDashboard() {
   const salatStatus = jenisSalats.map((nama) => ({ nama, status: praktikPerJenis.get(nama) ?? null }));
   const salatLancar = salatStatus.filter((s) => s.status === "LANCAR").length;
   const salatBimbingan = salatStatus.filter((s) => s.status === "BUTUH_BIMBINGAN").length;
-  const salatBelum = salatStatus.filter((s) => !s.status).length;
 
   // --- Perkembangan terbaru (gabungan 5 tabel) ---
   const recent: { id: string; tanggal: string; tipe: string; detail: string; status: string | null; catatan: string | null }[] = [];
@@ -251,12 +227,24 @@ export default function OrangTuaDashboard() {
   const recentSorted = recent.sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1)).slice(0, 8);
 
   // --- Perlu perhatian (hanya pada periode terpilih) ---
-  const attention = recent.filter((r) =>
-    inPeriod(r.tanggal) && (
+  const attention = [
+    ...recent.filter((r) =>
+      inPeriod(r.tanggal) && (
       (r.tipe.includes("Bacaan") || r.tipe.includes("Hafalan")) && (r.status === "KURANG_LANCAR" || r.status === "TIDAK_LANCAR") ||
       (r.tipe.includes("Salat") && r.status === "BUTUH_BIMBINGAN")
-    )
-  ).sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1)).slice(0, 6);
+      )
+    ),
+    ...gerakanSalatKomponens
+      .filter((komponen) => komponen.status === "BUTUH_BIMBINGAN" && Boolean(komponen.perkembangan_gerakan_salat?.tanggal) && inPeriod(komponen.perkembangan_gerakan_salat!.tanggal))
+      .map((komponen) => ({
+        id: komponen.id,
+        tanggal: komponen.perkembangan_gerakan_salat!.tanggal,
+        tipe: "Gerakan Salat",
+        detail: komponen.komponen_salat?.nama ?? "Komponen gerakan",
+        status: komponen.status,
+        catatan: komponen.perkembangan_gerakan_salat?.catatan ?? null,
+      })),
+  ].sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1)).slice(0, 6);
 
   if (loading) return <div className="h-32 rounded-lg bg-muted animate-pulse" />;
   if (error) return (
@@ -271,6 +259,10 @@ export default function OrangTuaDashboard() {
       <p className="text-sm text-muted-foreground">Data anak belum tersedia.</p>
     </div>
   );
+
+  const latestUpdate = recentSorted[0]?.tanggal;
+  const bacaanSummary = bacaanDetail ?? "Belum ada catatan";
+  const bacaanStatus = latestBacaan?.status ? STATUS_LABEL[latestBacaan.status] ?? latestBacaan.status : "Menunggu penilaian";
 
   return (
     <div className="space-y-6">
@@ -307,231 +299,33 @@ export default function OrangTuaDashboard() {
         }
       />
 
-      <IslamicBanner text="Anak adalah amanah, didiklah mereka dengan pendidikan yang baik." source="Pesan bijak bagi orang tua" />
-
-      {activeSantri && (
-        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-700 via-primary to-teal-600 p-5 text-white">
-          <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full border border-white/15" />
-          <div className="absolute -bottom-12 -left-8 h-32 w-32 rounded-full border border-white/10" />
-          <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-white/15 p-3 text-lg font-bold text-white">{activeSantri.nama.charAt(0)}</div>
-              <div>
-                <p className="text-xs text-white/70">Nama</p>
-                <p className="font-semibold text-white">{activeSantri.nama}</p>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-white/70">Kelompok</p>
-              <p className="font-medium text-white">{activeSantri.kelompok?.nama ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-white/70">Sesi</p>
-              <p className="font-medium text-white">{activeSantri.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : activeSantri.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-white/70">Pengajar</p>
-              <p className="font-medium text-white">{activeSantri.kelompok?.pengajar?.nama ?? "-"}</p>
-            </div>
-          </div>
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-700 via-primary to-teal-700 p-5 text-white sm:p-6">
+        <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full border border-white/15" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-xl font-bold">{activeSantri.nama.charAt(0)}</div><div><p className="text-sm text-white/75">Perkembangan</p><h2 className="text-xl font-semibold">{activeSantri.nama}</h2><p className="mt-1 text-sm text-white/80">Kelompok {activeSantri.kelompok?.nama ?? "-"}{activeSantri.keterangan ? ` · ${formatTingkat(activeSantri.keterangan)}` : ""} · Sesi {activeSantri.kelompok?.sesi?.nama === "PAGI" ? "Pagi" : activeSantri.kelompok?.sesi?.nama === "SORE" ? "Sore" : "-"}</p></div></div>
+          <p className="rounded-lg bg-white/10 px-3 py-2 text-xs text-white/85">{latestUpdate ? `Terakhir diperbarui ${formatDateShort(latestUpdate)}` : "Belum ada pembaruan perkembangan"}</p>
         </div>
-      )}
-
-      <section className="surface-panel p-5 sm:p-6">
-        <SectionHeader title="Capaian Santri" description="Posisi capaian saat ini (kehadiran & posisi bacaan pada periode terpilih; hafalan & salat kumulatif)" />
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <CapaianBar label="Kehadiran" value={`${hadir} dari ${totalPres} pertemuan`} pct={attendanceRate} color="bg-emerald-500" />
-          <CapaianBar label="Bacaan" value={latestBacaan ? (latestBacaan.jenis_bacaan === "IQRA" ? `Iqra Jilid ${latestBacaan.jilid} · Hal. ${latestBacaan.halaman}` : `${latestBacaan.surat?.nama ?? "-"} · Juz ${latestBacaan.juz ?? "-"}`) : "Belum ada catatan"} pct={latestBacaan?.jenis_bacaan === "IQRA" && latestBacaan.jilid ? Math.round((latestBacaan.jilid / 6) * 100) : 0} color="bg-amber-500" />
-          <CapaianBar label="Hafalan Surat" value={`${suratLulus} dari ${TARGET_SURAT} surat tuntas`} pct={TARGET_SURAT ? Math.round((suratLulus / TARGET_SURAT) * 100) : 0} color="bg-indigo-500" />
-          <CapaianBar label="Hafalan Doa" value={`${doaDihafal} dari ${totalDoa} doa`} pct={totalDoa ? Math.round((doaDihafal / totalDoa) * 100) : 0} color="bg-violet-500" />
-          <CapaianBar label="Niat Salat" value={`${salatLancar} dari ${salatStatus.length} salat Lancar`} pct={salatStatus.length ? Math.round((salatLancar / salatStatus.length) * 100) : 0} color="bg-sky-500" />
-        </div>
-        {trend.length >= 2 && (
-          <div className="mt-4 rounded-lg border border-border/70 p-3 sm:p-4">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Perkembangan hafalan (kumulatif jumlah surat)</p>
-            <div className="h-52 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trend} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="otTuntas2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.25} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
-                    <linearGradient id="otDimulai2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity={0.2} /><stop offset="100%" stopColor="#f59e0b" stopOpacity={0} /></linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.86 0.018 92)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "oklch(0.48 0.025 155)" }} tickLine={false} axisLine={{ stroke: "oklch(0.86 0.018 92)" }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "oklch(0.48 0.025 155)" }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid oklch(0.86 0.018 92)" }} />
-                  <Area type="monotone" dataKey="dimulai" name="Surat dimulai" stroke="#f59e0b" strokeWidth={2} fill="url(#otDimulai2)" />
-                  <Area type="monotone" dataKey="tuntas" name="Surat tuntas" stroke="#10b981" strokeWidth={2} fill="url(#otTuntas2)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-              <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />Surat tuntas</span>
-              <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-500" />Surat dimulai</span>
-            </div>
-          </div>
-        )}
       </section>
 
-      {/* CARD 1 — Presensi */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="surface-panel min-w-0 overflow-hidden p-5 sm:p-6">
-          <SectionHeader title="Presensi" description={`Periode: ${periodLabel(period)}`} />
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-            <StatCard label="Hadir" value={hadir} icon={CalendarCheck} className="bg-gradient-to-br from-emerald-500 to-teal-700" />
-            <StatCard label="Izin" value={izin} icon={CalendarX} className="bg-gradient-to-br from-amber-400 to-orange-600" />
-            <StatCard label="Sakit" value={sakit} icon={Activity} className="bg-gradient-to-br from-orange-400 to-red-500" />
-            <StatCard label="Alpha" value={alpha} icon={UserX} className="bg-gradient-to-br from-rose-500 to-red-600" />
-            <StatCard label="Persentase" value={`${attendanceRate}%`} icon={TrendingUp} className="bg-gradient-to-br from-sky-500 to-blue-700" />
-          </div>
-          <div className="mt-4 h-[160px] w-full min-w-0">
-            {totalPres > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                <PieChart><Pie data={attData} cx="50%" cy="50%" innerRadius="40%" outerRadius="60%" paddingAngle={3} dataKey="value" stroke="none" label={({ name, value }) => `${name} ${value}`} labelLine={false} style={{ fontSize: 10, fontWeight: 600, fill: "#26352e" }}>{attData.map((e, i) => <Cell key={e.name} style={{ fill: ATT_COLORS[i] }} />)}</Pie><Tooltip /></PieChart>
-              </ResponsiveContainer>
-            ) : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Belum ada presensi pada periode ini</div>}
-          </div>
-        </section>
+      <section><SectionHeader title="Ringkasan utama" description={`Kondisi ${activeSantri.nama} pada ${periodLabel(period).toLowerCase()}.`} /><div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Link href="/orang-tua/presensi" className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/50"><CalendarCheck className="h-4 w-4 text-emerald-600" /><p className="mt-3 text-2xl font-semibold">{attendanceRate}%</p><p className="text-sm font-medium">Kehadiran</p><p className="mt-1 text-xs text-muted-foreground">{hadir} dari {totalPres} pertemuan</p></Link>
+        <Link href="/orang-tua/perkembangan" className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/50"><BookOpen className="h-4 w-4 text-amber-600" /><p className="mt-3 truncate text-sm font-semibold">{bacaanSummary}</p><p className="mt-1 text-sm font-medium">Bacaan</p><p className="mt-1 text-xs text-muted-foreground">{bacaanStatus}</p></Link>
+        <Link href="/orang-tua/perkembangan" className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/50"><BookHeart className="h-4 w-4 text-violet-600" /><p className="mt-3 text-2xl font-semibold">{suratLulus}</p><p className="text-sm font-medium">Surat tuntas</p><p className="mt-1 text-xs text-muted-foreground">dari {TARGET_SURAT} target surat</p></Link>
+        <Link href="/orang-tua/perkembangan" className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/50"><Moon className="h-4 w-4 text-sky-600" /><p className="mt-3 text-2xl font-semibold">{salatLancar}/{salatStatus.length}</p><p className="text-sm font-medium">Niat salat lancar</p><p className="mt-1 text-xs text-muted-foreground">{salatBimbingan ? `${salatBimbingan} perlu bimbingan` : "Tidak ada yang perlu dibimbing"}</p></Link>
+      </div></section>
 
-        {/* CARD 2 — Bacaan */}
-        <section className="surface-panel min-w-0 p-5 sm:p-6">
-          <SectionHeader title="Bacaan" description="Perkembangan bacaan terbaru" />
-          <div className="mt-4 rounded-lg border border-border p-4">
-            <div className="flex items-center gap-2 text-primary"><BookOpen className="h-4 w-4" /><span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Terbaru</span></div>
-            {bacaanDetail ? (
-              <>
-                <p className="mt-2 text-xl font-semibold text-foreground">{bacaanDetail}</p>
-                <div className="mt-2 flex items-center gap-2">
-                  {latestBacaan?.status && <Badge variant={STATUS_BADGE[latestBacaan.status] ?? "secondary"}>{STATUS_LABEL[latestBacaan.status] ?? latestBacaan.status}</Badge>}
-                  <span className="text-xs text-muted-foreground">{latestBacaan ? formatDateShort(latestBacaan.tanggal) : ""}</span>
-                </div>
-                {latestBacaan?.catatan && <p className="mt-2 text-sm italic text-muted-foreground">&quot;{latestBacaan.catatan}&quot;</p>}
-              </>
-            ) : <p className="mt-2 text-sm text-muted-foreground">Belum ada catatan bacaan</p>}
-          </div>
-        </section>
+      <section className="surface-panel p-5 sm:p-6"><SectionHeader title="Capaian perkembangan" description="Ringkasan capaian yang dapat diukur dari catatan yang tersedia." /><div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <CapaianBar label="Hafalan surat" value={`${suratLulus} dari ${TARGET_SURAT} surat tuntas`} pct={Math.round((suratLulus / TARGET_SURAT) * 100)} color="bg-indigo-500" />
+        <CapaianBar label="Hafalan doa" value={`${doaDihafal} dari ${totalDoa} doa`} pct={totalDoa ? Math.round((doaDihafal / totalDoa) * 100) : 0} color="bg-violet-500" />
+        <CapaianBar label="Niat salat" value={`${salatLancar} dari ${salatStatus.length} dinilai lancar`} pct={salatStatus.length ? Math.round((salatLancar / salatStatus.length) * 100) : 0} color="bg-sky-500" />
+      </div></section>
 
-        {/* CARD 3 — Hafalan Surat */}
-        <section className="surface-panel min-w-0 p-5 sm:p-6">
-          <SectionHeader title="Hafalan Surat" description="Capaian hafalan surat" />
-          <div className="mt-4 rounded-lg border border-border p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Surat lulus dihafal</p>
-              <strong className="font-mono text-xl text-primary">{suratLulus} / {TARGET_SURAT} surat</strong>
-            </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${(suratLulus / TARGET_SURAT) * 100}%` }} />
-            </div>
-            {latestSurat && (
-              <div className="mt-4 border-t border-border/60 pt-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-foreground">{latestSurat.nama}</p>
-                  <span className="text-xs text-muted-foreground">{formatDateShort(latestSurat.lastTanggal)}</span>
-                </div>
-                <div className="mt-1 flex items-end justify-between">
-                  <span className="font-mono text-lg text-foreground">{latestSurat.max} / {latestSurat.jumlah} ayat</span>
-                  <span className="text-xs text-muted-foreground">{latestSurat.jumlah ? Math.round((latestSurat.max / latestSurat.jumlah) * 100) : 0}%</span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${latestSurat.jumlah ? Math.min(100, (latestSurat.max / latestSurat.jumlah) * 100) : 0}%` }} />
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  {latestSurat.lastStatus && <Badge variant={STATUS_BADGE[latestSurat.lastStatus] ?? "secondary"}>{STATUS_LABEL[latestSurat.lastStatus] ?? latestSurat.lastStatus}</Badge>}
-                  <span>Setoran terakhir: ayat {latestSurat.setoran}</span>
-                </div>
-              </div>
-            )}
-            {suratGroups.length === 0 && <p className="mt-3 text-sm text-muted-foreground">Belum ada hafalan surat</p>}
-          </div>
-        </section>
-
-        {/* CARD 4 — Hafalan Doa */}
-        <section className="surface-panel min-w-0 p-5 sm:p-6">
-          <SectionHeader title="Hafalan Doa" description="Capaian hafalan doa harian" />
-          <div className="mt-4 rounded-lg border border-border p-4">
-            <div className="flex items-center gap-2 text-purple-600"><BookHeart className="h-4 w-4" /></div>
-            <div className="mt-2 flex items-end justify-between">
-              <span className="font-mono text-2xl text-foreground">{doaDihafal} / {totalDoa} doa</span>
-              <span className="text-xs text-muted-foreground">{totalDoa ? Math.round((doaDihafal / totalDoa) * 100) : 0}%</span>
-            </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-purple-500" style={{ width: `${totalDoa ? Math.min(100, (doaDihafal / totalDoa) * 100) : 0}%` }} />
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">Jumlah doa yang sudah dihafal dari total doa harian yang diajarkan.</p>
-          </div>
-        </section>
-
-        {/* CARD 5 — Niat Salat */}
-        <section className="surface-panel min-w-0 p-5 sm:p-6 lg:col-span-2">
-          <SectionHeader title="Niat Salat" description="Status terbaru per jenis salat; gerakan tercatat sebagai riwayat terpisah." />
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {salatStatus.map((s) => (
-              <div key={s.nama} className="rounded-lg border border-border p-3 text-center">
-                <p className="font-medium text-foreground">{s.nama}</p>
-                <p className="mt-1 text-sm">
-                  {s.status === "LANCAR" ? <span className="text-green-600">Lancar</span>
-                    : s.status === "BUTUH_BIMBINGAN" ? <span className="text-amber-600">Butuh Bimbingan</span>
-                    : <span className="text-muted-foreground">Belum Dinilai</span>}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-            <span><span className="inline-block h-2 w-2 rounded-full bg-green-600 mr-1" />Lancar: {salatLancar}</span>
-            <span><span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-1" />Butuh Bimbingan: {salatBimbingan}</span>
-            <span><span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40 mr-1" />Belum Dinilai: {salatBelum}</span>
-          </div>
-        </section>
-      </div>
-
-      {/* Perlu perhatian */}
-      <section className="surface-panel min-w-0 p-5 sm:p-6">
-        <SectionHeader title="Perlu Perhatian" description="Penilaian yang membutuhkan tindak lanjut" />
-        {attention.length === 0 ? (
-          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><AlertTriangle className="h-4 w-4" /> Tidak ada item yang perlu perhatian</div>
-        ) : (
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {attention.map((a) => (
-              <div key={a.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-md bg-amber-100 p-1.5 text-amber-700"><AlertTriangle className="h-4 w-4" /></div>
-                  <div>
-                    <p className="font-medium text-foreground">{a.tipe}</p>
-                    <p className="text-sm text-muted-foreground">{a.detail}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  {a.status && <Badge variant={STATUS_BADGE[a.status] ?? "secondary"}>{STATUS_LABEL[a.status] ?? a.status}</Badge>}
-                  <p className="mt-1 text-xs text-muted-foreground">{formatDateShort(a.tanggal)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <section className="surface-panel p-5 sm:p-6"><SectionHeader title="Perkembangan terbaru" description="Catatan terbaru dari proses belajar anak." actions={<Link href="/orang-tua/perkembangan" className="action-link inline-flex items-center gap-1 text-sm">Lihat semua <ArrowRight className="h-3.5 w-3.5" /></Link>} />
+        {recentSorted.length === 0 ? <div className="mt-4 flex items-center gap-2 rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground"><BookOpen className="h-4 w-4" /> Belum ada perkembangan yang dicatat.</div> : <div className="mt-4 space-y-3">{recentSorted.slice(0, 5).map((r) => <div key={r.id} className="flex gap-3"><div className="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-primary bg-card" /><div className="min-w-0 flex-1 border-b border-border/70 pb-3 last:border-0"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{r.tipe}</Badge>{r.status && <Badge variant={STATUS_BADGE[r.status] ?? "secondary"}>{STATUS_LABEL[r.status] ?? r.status}</Badge>}</div><time className="text-xs text-muted-foreground">{formatDateShort(r.tanggal)}</time></div><p className="mt-2 text-sm font-medium text-foreground">{r.detail}</p>{r.catatan && <p className="mt-1 text-sm italic text-muted-foreground">&quot;{r.catatan}&quot;</p>}</div></div>)}</div>}
       </section>
 
-      {/* Perkembangan terbaru */}
-      <section className="surface-panel min-w-0 p-5 sm:p-6">
-        <SectionHeader title="Perkembangan Terbaru" description="Catatan perkembangan terkini" />
-        {recentSorted.length === 0 ? (
-          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><BookOpen className="h-4 w-4" /> Belum ada perkembangan</div>
-        ) : (
-          <div className="mt-4 space-y-2">
-            {recentSorted.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{r.tipe}</Badge>
-                    {r.status && <Badge variant={STATUS_BADGE[r.status] ?? "secondary"}>{STATUS_LABEL[r.status] ?? r.status}</Badge>}
-                  </div>
-                  <p className="mt-1 text-sm text-foreground">{r.detail}</p>
-                  {r.catatan && <p className="mt-1 text-sm italic text-muted-foreground">&quot;{r.catatan}&quot;</p>}
-                </div>
-                <div className="text-xs text-muted-foreground">{formatDateShort(r.tanggal)}</div>
-              </div>
-            ))}
-          </div>
-        )}
+      <section className="surface-panel p-5 sm:p-6"><SectionHeader title="Hal yang perlu diperhatikan" description="Penilaian yang membutuhkan tindak lanjut." />
+        {attention.length === 0 ? <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><CircleCheck className="h-4 w-4" /> Belum ada hal yang perlu diperhatikan.</div> : <div className="mt-4 grid gap-2 sm:grid-cols-2">{attention.map((a) => <div key={a.id} className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/50 px-4 py-3"><div className="flex gap-3"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" /><div><p className="font-medium text-foreground">{a.tipe}</p><p className="text-sm text-muted-foreground">{a.detail}</p></div></div><div className="shrink-0 text-right">{a.status && <Badge variant={STATUS_BADGE[a.status] ?? "secondary"}>{STATUS_LABEL[a.status] ?? a.status}</Badge>}<p className="mt-1 text-xs text-muted-foreground">{formatDateShort(a.tanggal)}</p></div></div>)}</div>}
       </section>
     </div>
   );

@@ -8,21 +8,22 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { BookOpen, BookMarked, BookHeart, Moon, UserX } from "lucide-react";
-import { formatDateShort } from "@/lib/format";
+import { BookOpen, BookMarked, BookHeart, Moon, UserRound, UserX } from "lucide-react";
+import { formatDateShort, formatSesi, formatTingkat } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/layout/empty-state";
 
-type BacaanRow = { id: string; tanggal: string; jenis_bacaan: string | null; jilid: number | null; halaman: number | null; juz: number | null; status: string | null; catatan: string | null; surat?: { nama: string } | null }
+type Pengajar = { nama: string }
+type BacaanRow = { id: string; tanggal: string; jenis_bacaan: string | null; jilid: number | null; halaman: number | null; juz: number | null; status: string | null; catatan: string | null; surat?: { nama: string } | null; pengajar?: Pengajar | null }
 type HafalanSuratRow = { id: string; surat_id: string; surat?: { nomor: number; nama: string; jumlah_ayat: number } | null }
-type CicilanRow = { id: string; hafalan_santri_id: string; tanggal: string; ayat_mulai: number; ayat_selesai: number; status: string | null }
-type DoaRow = { id: string; tanggal: string; status: string | null; doa?: { nama: string } | null }
+type CicilanRow = { id: string; hafalan_santri_id: string; tanggal: string; ayat_mulai: number; ayat_selesai: number; status: string | null; catatan: string | null; pengajar?: Pengajar | null }
+type DoaRow = { id: string; tanggal: string; status: string | null; catatan: string | null; doa?: { nama: string } | null; pengajar?: Pengajar | null }
 type KomponenRow = { id: string; tanggal: string; status: string | null; komponen_salat_id: string }
 type PraktikRow = { id: string; tanggal: string; status: string | null; jenis_salat_id: string }
-type GerakanSalatRow = { id: string; tanggal: string; catatan: string | null }
+type GerakanSalatRow = { id: string; tanggal: string; catatan: string | null; pengajar?: Pengajar | null }
 type GerakanSalatKomponenRow = { id: string; perkembangan_gerakan_salat_id: string; status: string; komponen_salat?: { nama: string } | null }
-type NiatSalatRow = { id: string; tanggal: string; status: string; catatan: string | null; jenis_salat?: { nama: string } | null }
-type Santri = { id: string; nama: string }
+type NiatSalatRow = { id: string; tanggal: string; status: string; catatan: string | null; jenis_salat?: { nama: string } | null; pengajar?: Pengajar | null }
+type Santri = { id: string; nama: string; keterangan: string | null; kelompok?: { nama: string; sesi?: { nama: string } | null } | null }
 
 const BAC_STATUS: Record<string, string> = { LANCAR: "Lancar", KURANG_LANCAR: "Kurang Lancar", TIDAK_LANCAR: "Tidak Lancar" }
 const SALAT_STATUS: Record<string, string> = { LANCAR: "Lancar", BUTUH_BIMBINGAN: "Butuh Bimbingan" }
@@ -35,7 +36,8 @@ export default function PerkembanganPage() {
   const { user } = useAuth();
   const [santris, setSantris] = useState<Santri[]>([]);
   const [activeSantriId, setActiveSantriId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [childrenLoading, setChildrenLoading] = useState(true);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bacaans, setBacaans] = useState<BacaanRow[]>([]);
   const [hafalanSurat, setHafalanSurat] = useState<HafalanSuratRow[]>([]);
@@ -54,22 +56,22 @@ export default function PerkembanganPage() {
   useEffect(() => {
     const fetchSantris = async () => {
       if (!user) return;
-      setLoading(true);
+      setChildrenLoading(true);
       setError(null);
       const { data, error } = await supabase
         .from("santri")
-        .select("id, nama")
+        .select("id, nama, keterangan, kelompok(nama, sesi(nama))")
         .order("nama");
       if (error) {
         setError("Data anak tidak dapat dimuat. Silakan coba lagi.");
         setSantris([]);
         setActiveSantriId(null);
       } else {
-        const nextSantris = (data ?? []) as Santri[];
+        const nextSantris = (data ?? []) as unknown as Santri[];
         setSantris(nextSantris);
         setActiveSantriId((currentId) => nextSantris.some((santri) => santri.id === currentId) ? currentId : nextSantris[0]?.id ?? null);
       }
-      setLoading(false);
+      setChildrenLoading(false);
     };
     fetchSantris();
   }, [user]);
@@ -91,7 +93,7 @@ export default function PerkembanganPage() {
         setNiatSalats([]);
         return;
       }
-      setLoading(true);
+      setDetailsLoading(true);
       setError(null);
       setBacaans([]);
       setHafalanSurat([]);
@@ -103,16 +105,16 @@ export default function PerkembanganPage() {
       setGerakanKomponens([]);
       setNiatSalats([]);
       const [ba, hs, ci, doa, komM, kom, js, pk, gerakan, niat] = await Promise.all([
-        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, status, catatan, surat(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
+        supabase.from("perkembangan_bacaan").select("id, tanggal, jenis_bacaan, jilid, halaman, juz, status, catatan, surat(nama), pengajar(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
         supabase.from("hafalan_santri").select("id, surat_id, surat(nomor, nama, jumlah_ayat)").eq("santri_id", activeSantriId),
-        supabase.from("hafalan_surat_cicilan").select("id, hafalan_santri_id, tanggal, ayat_mulai, ayat_selesai, status, hafalan_santri!inner(santri_id)").eq("hafalan_santri.santri_id", activeSantriId),
-        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, doa(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
+        supabase.from("hafalan_surat_cicilan").select("id, hafalan_santri_id, tanggal, ayat_mulai, ayat_selesai, status, catatan, pengajar(nama), hafalan_santri!inner(santri_id)").eq("hafalan_santri.santri_id", activeSantriId),
+        supabase.from("perkembangan_hafalan_doa").select("id, tanggal, status, catatan, doa(nama), pengajar(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
         supabase.from("komponen_salat").select("id, nama").eq("aktif", true).order("nama"),
         supabase.from("perkembangan_salat_komponen").select("id, tanggal, status, komponen_salat_id").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
         supabase.from("jenis_salat").select("id, nama").eq("aktif", true).order("nama"),
         supabase.from("praktik_salat").select("id, tanggal, status, jenis_salat_id").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }),
-        supabase.from("perkembangan_gerakan_salat").select("id, tanggal, catatan").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
-        supabase.from("perkembangan_niat_salat").select("id, tanggal, status, catatan, jenis_salat(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("perkembangan_gerakan_salat").select("id, tanggal, catatan, pengajar(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("perkembangan_niat_salat").select("id, tanggal, status, catatan, jenis_salat(nama), pengajar(nama)").eq("santri_id", activeSantriId).order("tanggal", { ascending: false }).order("created_at", { ascending: false }),
       ]);
       if (cancelled) return;
       const gerakanIds = (gerakan.data ?? []).map((item) => item.id);
@@ -123,7 +125,7 @@ export default function PerkembanganPage() {
       const perkembanganError = [ba, hs, ci, doa, komM, kom, js, pk, gerakan, niat, gerakanKomponen].find((result) => result.error)?.error;
       if (perkembanganError) {
         setError("Data perkembangan tidak dapat dimuat. Silakan coba lagi.");
-        setLoading(false);
+        setDetailsLoading(false);
         return;
       }
       setBacaans((ba.data ?? []) as unknown as BacaanRow[])
@@ -134,16 +136,16 @@ export default function PerkembanganPage() {
       setKomponenRows((kom.data ?? []) as unknown as KomponenRow[])
       setJenisSalats((js.data ?? []) as { id: string; nama: string }[])
       setPraktiks((pk.data ?? []) as unknown as PraktikRow[])
-      setGerakanSalats((gerakan.data ?? []) as GerakanSalatRow[])
+      setGerakanSalats((gerakan.data ?? []) as unknown as GerakanSalatRow[])
       setGerakanKomponens((gerakanKomponen.data ?? []) as unknown as GerakanSalatKomponenRow[])
       setNiatSalats((niat.data ?? []) as unknown as NiatSalatRow[])
-      setLoading(false);
+      setDetailsLoading(false);
     };
     fetchPerkembangan();
     return () => { cancelled = true; };
   }, [activeSantriId]);
 
-  if (loading) return <div className="h-32 rounded-lg bg-muted animate-pulse" />;
+  if (childrenLoading) return <div className="h-32 rounded-lg bg-muted animate-pulse" />;
   if (error) return (
     <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center sm:p-12">
       <UserX className="mx-auto h-10 w-10 text-destructive/60 mb-3" />
@@ -192,6 +194,15 @@ export default function PerkembanganPage() {
     gerakanKomponenBySesi.set(komponen.perkembangan_gerakan_salat_id, rows);
   });
   const hasLegacySalat = komponenRows.length > 0 || praktiks.length > 0;
+  const lastUpdate = [
+    ...bacaans.map((row) => ({ tanggal: row.tanggal, kategori: "Bacaan" })),
+    ...cicilans.map((row) => ({ tanggal: row.tanggal, kategori: "Hafalan Surat" })),
+    ...doas.map((row) => ({ tanggal: row.tanggal, kategori: "Hafalan Doa" })),
+    ...gerakanSalats.map((row) => ({ tanggal: row.tanggal, kategori: "Gerakan Salat" })),
+    ...niatSalats.map((row) => ({ tanggal: row.tanggal, kategori: "Niat Salat" })),
+  ].sort((a, b) => b.tanggal.localeCompare(a.tanggal))[0];
+  const latestBacaan = bacaans[0];
+  const doaDinilai = new Set(doas.map((row) => row.doa?.nama).filter(Boolean)).size;
 
   return (
     <div className="space-y-6">
@@ -213,28 +224,37 @@ export default function PerkembanganPage() {
         ) : undefined}
       />
 
-      <Tabs defaultValue="bacaan" className="w-full">
-        <TabsList className="grid min-h-12 h-auto w-full grid-cols-2 lg:grid-cols-4">
+      <section className="surface-panel p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Detail perkembangan</p><p className="mt-1 text-lg font-semibold text-foreground">{activeSantri.nama}</p><p className="mt-1 text-sm text-muted-foreground">Kelompok {activeSantri.kelompok?.nama ?? "-"}{activeSantri.keterangan ? ` · ${formatTingkat(activeSantri.keterangan)}` : ""} · Sesi {formatSesi(activeSantri.kelompok?.sesi?.nama ?? "-")}</p></div>
+          <div className="rounded-lg bg-muted/60 px-3 py-2 text-sm"><p className="text-xs text-muted-foreground">Pembaruan terakhir</p><p className="mt-0.5 font-medium text-foreground">{lastUpdate ? `${lastUpdate.kategori} · ${formatDateShort(lastUpdate.tanggal)}` : "Belum ada penilaian"}</p></div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-4"><p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Status terakhir</p>{latestBacaan ? <div className="mt-2 flex flex-wrap items-center gap-2"><p className="font-medium text-foreground">Bacaan · {latestBacaan.jenis_bacaan === "IQRA" ? `Iqra jilid ${latestBacaan.jilid} halaman ${latestBacaan.halaman}` : `${latestBacaan.surat?.nama ?? "Al-Qur'an"} · Juz ${latestBacaan.juz ?? "-"}`}</p>{latestBacaan.status && <Badge variant={BAC_BADGE[latestBacaan.status] ?? "secondary"}>{BAC_STATUS[latestBacaan.status] ?? latestBacaan.status}</Badge>}<span className="text-xs text-muted-foreground">{formatDateShort(latestBacaan.tanggal)}</span></div> : <p className="mt-2 text-sm text-muted-foreground">Belum ada penilaian perkembangan untuk ditampilkan.</p>}</section>
+
+      {detailsLoading ? <div className="space-y-3"><div className="h-12 animate-pulse rounded-lg bg-muted" /><div className="h-64 animate-pulse rounded-xl bg-muted" /></div> : <Tabs defaultValue="bacaan" className="w-full">
+        <TabsList className="grid h-auto min-h-12 w-full grid-cols-2 lg:grid-cols-4">
           <TabsTrigger value="bacaan" className="gap-1 px-1 text-xs sm:text-sm"><BookOpen className="h-4 w-4" /> Bacaan</TabsTrigger>
           <TabsTrigger value="hafalan-surat" className="gap-1 px-1 text-xs sm:text-sm"><BookMarked className="h-4 w-4" /> Hafalan Surat</TabsTrigger>
           <TabsTrigger value="hafalan-doa" className="gap-1 px-1 text-xs sm:text-sm"><BookHeart className="h-4 w-4" /> Hafalan Doa</TabsTrigger>
-          <TabsTrigger value="salat" className="gap-1 px-1 text-xs sm:text-sm"><Moon className="h-4 w-4" /> Praktik Salat</TabsTrigger>
+          <TabsTrigger value="salat" className="gap-1 px-1 text-xs sm:text-sm"><Moon className="h-4 w-4" /><span className="sm:hidden">Salat</span><span className="hidden sm:inline">Praktik Salat</span></TabsTrigger>
         </TabsList>
 
         {/* TAB BACAAN */}
         <TabsContent value="bacaan" className="pt-4">
           <Card className="card-elevated">
-            <CardHeader><CardTitle className="text-sm font-medium">Histori Bacaan</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-sm font-medium">Riwayat Bacaan</CardTitle><p className="text-sm text-muted-foreground">Status, catatan, dan pencatat setiap penilaian.</p></CardHeader>
             <CardContent>
-              {bacaans.length === 0 ? <EmptyState message="Belum ada catatan bacaan" hint="Catatan perkembangan bacaan anak akan tampil di sini." /> : (
-                <div className="overflow-x-auto">
+              {bacaans.length === 0 ? <EmptyState message="Belum ada penilaian bacaan." hint="Penilaian bacaan anak akan tampil setelah dicatat pengajar." /> : <>
+                <div className="hidden overflow-x-auto sm:block">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted-foreground">
                         <th className="py-2 pr-3 font-medium">Tanggal</th>
                         <th className="py-2 pr-3 font-medium">Jenis</th>
                         <th className="py-2 pr-3 font-medium">Materi</th>
-                        <th className="py-2 font-medium">Status</th>
+                        <th className="py-2 pr-3 font-medium">Status</th><th className="py-2 pr-3 font-medium">Catatan</th><th className="py-2 font-medium">Pengajar Pencatat</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -247,13 +267,12 @@ export default function PerkembanganPage() {
                               ? `Jilid ${r.jilid} · Halaman ${r.halaman}`
                               : `${r.surat?.nama ?? "-"} · Juz ${r.juz ?? "-"}`}
                           </td>
-                          <td className="py-2.5">{r.status ? <Badge variant={BAC_BADGE[r.status] ?? "secondary"}>{BAC_STATUS[r.status] ?? r.status}</Badge> : "-"}</td>
+                          <td className="py-2.5 pr-3">{r.status ? <Badge variant={BAC_BADGE[r.status] ?? "secondary"}>{BAC_STATUS[r.status] ?? r.status}</Badge> : "-"}</td><td className="max-w-56 py-2.5 pr-3 text-muted-foreground">{r.catatan ?? "-"}</td><td className="py-2.5 text-muted-foreground">{r.pengajar?.nama ?? "-"}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
+                </div><div className="space-y-3 sm:hidden">{bacaans.map((r) => <article key={r.id} className="rounded-lg border border-border p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-muted-foreground">{formatDateShort(r.tanggal)}</p><p className="mt-1 font-medium text-foreground">{r.jenis_bacaan === "IQRA" ? `Iqra jilid ${r.jilid} · Halaman ${r.halaman}` : `${r.surat?.nama ?? "Al-Qur'an"} · Juz ${r.juz ?? "-"}`}</p></div>{r.status && <Badge variant={BAC_BADGE[r.status] ?? "secondary"}>{BAC_STATUS[r.status] ?? r.status}</Badge>}</div>{r.catatan && <p className="mt-3 text-sm italic text-muted-foreground">&quot;{r.catatan}&quot;</p>}<RecordMeta tanggal={r.tanggal} pengajar={r.pengajar?.nama} /></article>)}</div></>}
             </CardContent>
           </Card>
         </TabsContent>
@@ -261,7 +280,7 @@ export default function PerkembanganPage() {
         {/* TAB HAFALAN SURAT */}
         <TabsContent value="hafalan-surat" className="pt-4">
           <div className="space-y-4">
-            {suratDetail.length === 0 ? <EmptyState message="Belum ada hafalan surat" hint="Hafalan surat anak akan tampil di sini." /> : (
+            {suratDetail.length === 0 ? <EmptyState message="Belum ada perkembangan hafalan surat." hint="Capaian hafalan surat anak akan tampil setelah dinilai." /> : (
               suratDetail.map((s) => (
                 <Card key={s.id} className="card-elevated">
                   <CardContent className="p-5">
@@ -276,13 +295,7 @@ export default function PerkembanganPage() {
                       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Histori Cicilan</p>
                       {s.rows.length === 0 ? <EmptyState message="Belum ada cicilan" className="py-6" /> : (
                         s.rows.map((c) => (
-                          <div key={c.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
-                            <span className="text-foreground">Ayat {c.ayat_mulai}–{c.ayat_selesai}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">{formatDateShort(c.tanggal)}</span>
-                              {c.status && <Badge variant={BAC_BADGE[c.status] ?? "secondary"}>{BAC_STATUS[c.status] ?? c.status}</Badge>}
-                            </div>
-                          </div>
+                          <div key={c.id} className="rounded-md border border-border px-3 py-2.5 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-foreground">Ayat {c.ayat_mulai}–{c.ayat_selesai}</span>{c.status && <Badge variant={BAC_BADGE[c.status] ?? "secondary"}>{BAC_STATUS[c.status] ?? c.status}</Badge>}</div>{c.catatan && <p className="mt-2 italic text-muted-foreground">&quot;{c.catatan}&quot;</p>}<RecordMeta tanggal={c.tanggal} pengajar={c.pengajar?.nama} /></div>
                         ))
                       )}
                     </div>
@@ -296,18 +309,12 @@ export default function PerkembanganPage() {
         {/* TAB HAFALAN DOA */}
         <TabsContent value="hafalan-doa" className="pt-4">
           <Card className="card-elevated">
-            <CardHeader><CardTitle className="text-sm font-medium">Histori Hafalan Doa</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-sm font-medium">Hafalan Doa</CardTitle><p className="text-sm text-muted-foreground">{doaDinilai} doa telah pernah dinilai.</p></CardHeader>
             <CardContent>
-              {doas.length === 0 ? <EmptyState message="Belum ada hafalan doa" hint="Hafalan doa harian anak akan tampil di sini." /> : (
+              {doas.length === 0 ? <EmptyState message="Belum ada penilaian hafalan doa." hint="Penilaian hafalan doa akan tampil setelah dicatat pengajar." /> : (
                 <div className="space-y-2">
                   {doas.map((d) => (
-                    <div key={d.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-2.5">
-                      <span className="font-medium text-foreground">{d.doa?.nama ?? "-"}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">{formatDateShort(d.tanggal)}</span>
-                        {d.status && <Badge variant={BAC_BADGE[d.status] ?? "secondary"}>{BAC_STATUS[d.status] ?? d.status}</Badge>}
-                      </div>
-                    </div>
+                    <div key={d.id} className="rounded-lg border border-border px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-foreground">{d.doa?.nama ?? "-"}</span>{d.status && <Badge variant={BAC_BADGE[d.status] ?? "secondary"}>{BAC_STATUS[d.status] ?? d.status}</Badge>}</div>{d.catatan && <p className="mt-2 text-sm italic text-muted-foreground">&quot;{d.catatan}&quot;</p>}<RecordMeta tanggal={d.tanggal} pengajar={d.pengajar?.nama} /></div>
                   ))}
                 </div>
               )}
@@ -321,25 +328,21 @@ export default function PerkembanganPage() {
             <Card className="card-elevated">
               <CardHeader><CardTitle className="text-sm font-medium">Gerakan Salat</CardTitle></CardHeader>
               <CardContent>
-                {gerakanSalats.length === 0 ? <EmptyState message="Belum ada penilaian gerakan salat" hint="Penilaian delapan gerakan salat anak akan tampil di sini." /> : (
+                {gerakanSalats.length === 0 ? <EmptyState message="Belum ada penilaian gerakan salat." hint="Penilaian komponen gerakan salat akan tampil setelah dicatat." /> : (
                   <div className="space-y-4">
                     {gerakanSalats.map((gerakan) => {
                       const detail = gerakanKomponenBySesi.get(gerakan.id) ?? [];
+                      const lancar = detail.filter((komponen) => komponen.status === "LANCAR").length;
+                      const bimbingan = detail.filter((komponen) => komponen.status === "BUTUH_BIMBINGAN").length;
                       return (
                         <div key={gerakan.id} className="rounded-lg border border-border p-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="font-medium text-foreground">Penilaian gerakan</p>
                             <span className="text-xs text-muted-foreground">{formatDateShort(gerakan.tanggal)}</span>
                           </div>
-                          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            {detail.map((komponen) => (
-                              <div key={komponen.id} className="flex items-center justify-between gap-3 rounded-md bg-muted/30 px-3 py-2 text-sm">
-                                <span className="font-medium text-foreground">{komponen.komponen_salat?.nama ?? "Komponen salat"}</span>
-                                <Badge variant={SALAT_BADGE[komponen.status] ?? "secondary"}>{SALAT_STATUS[komponen.status] ?? komponen.status}</Badge>
-                              </div>
-                            ))}
-                          </div>
-                          {gerakan.catatan && <p className="mt-3 border-t border-border/70 pt-3 text-sm italic text-muted-foreground">&quot;{gerakan.catatan}&quot;</p>}
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">{detail.length} komponen</span><span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">{lancar} Lancar</span>{bimbingan > 0 && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">{bimbingan} Butuh Bimbingan</span>}</div>
+                          <details className="mt-3"><summary className="cursor-pointer text-sm font-medium text-primary">Lihat detail komponen</summary><div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{detail.map((komponen) => <div key={komponen.id} className="flex items-center justify-between gap-3 rounded-md bg-muted/30 px-3 py-2 text-sm"><span className="font-medium text-foreground">{komponen.komponen_salat?.nama ?? "Komponen salat"}</span><Badge variant={SALAT_BADGE[komponen.status] ?? "secondary"}>{SALAT_STATUS[komponen.status] ?? komponen.status}</Badge></div>)}</div></details>
+                          {gerakan.catatan && <p className="mt-3 border-t border-border/70 pt-3 text-sm italic text-muted-foreground">&quot;{gerakan.catatan}&quot;</p>}<RecordMeta tanggal={gerakan.tanggal} pengajar={gerakan.pengajar?.nama} />
                         </div>
                       );
                     })}
@@ -351,7 +354,7 @@ export default function PerkembanganPage() {
             <Card className="card-elevated">
               <CardHeader><CardTitle className="text-sm font-medium">Niat Salat</CardTitle></CardHeader>
               <CardContent>
-                {niatSalats.length === 0 ? <EmptyState message="Belum ada penilaian niat salat" hint="Riwayat penilaian niat salat anak akan tampil di sini." /> : (
+                {niatSalats.length === 0 ? <EmptyState message="Belum ada penilaian niat salat." hint="Riwayat penilaian niat salat akan tampil setelah dicatat." /> : (
                   <div className="space-y-2">
                     {niatSalats.map((niat) => (
                       <div key={niat.id} className="rounded-lg border border-border px-4 py-3">
@@ -362,7 +365,7 @@ export default function PerkembanganPage() {
                             <Badge variant={SALAT_BADGE[niat.status] ?? "secondary"}>{SALAT_STATUS[niat.status] ?? niat.status}</Badge>
                           </div>
                         </div>
-                        {niat.catatan && <p className="mt-2 text-sm italic text-muted-foreground">&quot;{niat.catatan}&quot;</p>}
+                        {niat.catatan && <p className="mt-2 text-sm italic text-muted-foreground">&quot;{niat.catatan}&quot;</p>}<RecordMeta tanggal={niat.tanggal} pengajar={niat.pengajar?.nama} />
                       </div>
                     ))}
                   </div>
@@ -416,11 +419,15 @@ export default function PerkembanganPage() {
             )}
 
             {!hasLegacySalat && gerakanSalats.length === 0 && niatSalats.length === 0 && (
-              <EmptyState message="Belum ada riwayat praktik salat" hint="Penilaian gerakan dan niat salat anak akan tampil di sini." />
+              <EmptyState message="Belum ada penilaian praktik salat." hint="Penilaian gerakan dan niat salat anak akan tampil setelah dicatat." />
             )}
           </div>
         </TabsContent>
-      </Tabs>
+      </Tabs>}
     </div>
   );
+}
+
+function RecordMeta({ tanggal, pengajar }: { tanggal: string; pengajar?: string }) {
+  return <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{formatDateShort(tanggal)}</span><span className="inline-flex items-center gap-1"><UserRound className="h-3 w-3" /> Pengajar Pencatat: {pengajar ?? "-"}</span></div>
 }

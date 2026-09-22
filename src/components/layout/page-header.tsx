@@ -19,7 +19,8 @@ export function PageHeader({ eyebrow, title, description, backHref, action }: Pa
   const [date, setDate] = useState(() => ({ masehiShort: "", hijri: "" }))
 
   useEffect(() => {
-    setDate(formatIslamicDate())
+    const timer = window.setTimeout(() => setDate(formatIslamicDate()), 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   return (

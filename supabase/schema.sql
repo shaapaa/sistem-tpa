@@ -1,5 +1,7 @@
 -- ============================================
--- DATABASE SCHEMA (regenerated from live DB)
+-- DATABASE SCHEMA SNAPSHOT
+-- Struktur jadwal sesi ditambahkan dari migration repository. Snapshot penuh
+-- harus diregenerate dari database setelah migration 20260921000016--20260922000019 diterapkan.
 -- Sistem Monitoring TPA Baitul Yatama
 -- ============================================
 
@@ -41,6 +43,30 @@ create table jadwal (
   is_active boolean default true,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
+);
+
+-- Struktur penjadwalan sesi yang berlaku setelah migrasi September 2026.
+create table jadwal_sesi (
+  id uuid default gen_random_uuid() not null,
+  sesi_id uuid not null,
+  hari text not null,
+  jam_mulai time without time zone not null,
+  jam_selesai time without time zone not null,
+  is_active boolean not null default true,
+  pengajar_id uuid,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  primary key (id),
+  unique (sesi_id, hari)
+);
+
+create table jadwal_sesi_pengajar (
+  id uuid default gen_random_uuid() not null,
+  jadwal_sesi_id uuid not null,
+  pengajar_id uuid not null,
+  created_at timestamp with time zone not null default now(),
+  primary key (id),
+  unique (jadwal_sesi_id, pengajar_id)
 );
 
 create table jenis_salat (

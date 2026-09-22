@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Plus, Pencil, Trash2, Users, Search } from "lucide-react"
-import { formatGender } from "@/lib/format"
+import { formatGender, urutkanJadwalMenurutHari } from "@/lib/format"
 import { PageHeader } from "@/components/layout/page-header"
 import { FilterBar } from "@/components/layout/filter-bar"
 
@@ -26,7 +26,7 @@ interface Pengajar {
 
 export default function PengajarPage() {
   const [pengajars, setPengajars] = useState<Pengajar[]>([])
-  const [kelompoks, setKelompoks] = useState<{ id: string; nama: string; pengajar_id: string | null; sesi?: { nama: string } | null; santri: { count: number }[] }[]>([])
+  const [jadwals, setJadwals] = useState<{ id: string; hari: string; pengajar_id: string; nama?: string; sesi?: { nama: string } | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Pengajar | null>(null)
@@ -43,16 +43,20 @@ export default function PengajarPage() {
   const supabase = createClient()
 
   const fetchData = async () => {
-    const [data, kel] = await Promise.all([
+    const [data, jadwal] = await Promise.all([
       supabase.from("pengajar").select("*, profiles(id, nama, role)").order("nama"),
-      supabase.from("kelompok").select("id, nama, pengajar_id, sesi(nama), santri(count)"),
+      supabase.from("jadwal_sesi_pengajar").select("pengajar_id, jadwal_sesi!inner(id, hari, sesi(nama))"),
     ])
     setPengajars(data.data ?? [])
-    setKelompoks((kel.data ?? []) as unknown as { id: string; nama: string; pengajar_id: string | null; sesi?: { nama: string } | null; santri: { count: number }[] }[])
+    const scheduleRows = ((jadwal.data ?? []) as unknown as { pengajar_id: string; jadwal_sesi?: { id: string; hari: string; sesi?: { nama: string } | null } | null }[]).flatMap((item) => item.jadwal_sesi ? [{ id: item.jadwal_sesi.id, hari: item.jadwal_sesi.hari, pengajar_id: item.pengajar_id, nama: "sesi", sesi: item.jadwal_sesi.sesi ?? null }] : [])
+    setJadwals(urutkanJadwalMenurutHari(scheduleRows))
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchData() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   const openAdd = () => {
     setEditing(null)
@@ -129,7 +133,7 @@ export default function PengajarPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Manajemen Data" title="Pengajar" description="Kelola master Pengajar dan penugasannya ke kelompok." action={<Button onClick={openAdd} className="h-9 px-4">
+      <PageHeader eyebrow="Manajemen Data" title="Pengajar" description="Kelola master Pengajar dan jadwal sesi mengajarnya." action={<Button onClick={openAdd} className="h-9 px-4">
           <Plus className="mr-2 h-4 w-4" /> Tambah Pengajar
         </Button>} />
 
@@ -191,18 +195,17 @@ export default function PengajarPage() {
                 {p.no_hp && <p className="text-xs text-muted-foreground">{p.no_hp}</p>}
                 {p.alamat && <p className="text-xs text-muted-foreground mt-0.5">{p.alamat}</p>}
                 {(() => {
-                  const owned = kelompoks.filter((k) => k.pengajar_id === p.id)
-                  if (owned.length === 0) return null
-                  return (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {owned.map((k) => (
+                  const assigned = jadwals.filter((jadwal) => jadwal.pengajar_id === p.id)
+                  if (assigned.length === 0) return null
+                  return (<><div className="mt-2 flex flex-wrap gap-1.5">{assigned.map((k) => <span key={k.id} className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{k.hari.charAt(0) + k.hari.slice(1).toLowerCase()} · Sesi {k.sesi?.nama === "PAGI" ? "Pagi" : k.sesi?.nama === "SORE" ? "Sore" : k.sesi?.nama ?? "-"}</span>)}</div>{/*
+                          {k.hari.charAt(0) + k.hari.slice(1).toLowerCase()} · Sesi {k.sesi?.nama === "PAGI" ? "Pagi" : k.sesi?.nama === "SORE" ? "Sore" : k.sesi?.nama ?? "-"}
+                      {assigned.map((k) => (
                         <span key={k.id} className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
                           {k.sesi?.nama === "PAGI" ? "Pagi" : k.sesi?.nama === "SORE" ? "Sore" : ""} · Kelompok {k.nama}
-                          <span className="text-primary/70">({(k.santri?.[0]?.count ?? 0)} santri)</span>
                         </span>
                       ))}
                     </div>
-                  )
+                  */}</>)
                 })()}
               </CardContent>
             </Card>
@@ -241,7 +244,7 @@ export default function PengajarPage() {
               <Input value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} className="h-9" placeholder="Alamat (opsional)" autoComplete="off" />
             </div>
             <p className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
-              Akun login dibuat sendiri oleh Pengajar melalui halaman pendaftaran. Admin hanya mengelola master Pengajar dan penugasannya ke kelompok.
+              Akun login dibuat sendiri oleh Pengajar melalui halaman pendaftaran. Admin mengatur penugasan mengajar melalui menu Jadwal Sesi.
             </p>
           </div>
           <DialogFooter>

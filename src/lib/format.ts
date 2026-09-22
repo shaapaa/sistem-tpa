@@ -47,6 +47,18 @@ export function formatHari(hari: string): string {
   return map[hari] ?? hari.charAt(0) + hari.slice(1).toLowerCase();
 }
 
+const URUTAN_HARI_KERJA = ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT"];
+
+/** Mengurutkan jadwal sesuai urutan hari belajar, bukan alfabetis database. */
+export function urutkanJadwalMenurutHari<T extends { hari: string; jam_mulai?: string }>(jadwals: T[]): T[] {
+  return [...jadwals].sort((a, b) => {
+    const urutanA = URUTAN_HARI_KERJA.indexOf(a.hari);
+    const urutanB = URUTAN_HARI_KERJA.indexOf(b.hari);
+    const selisihHari = (urutanA === -1 ? Number.MAX_SAFE_INTEGER : urutanA) - (urutanB === -1 ? Number.MAX_SAFE_INTEGER : urutanB);
+    return selisihHari || (a.jam_mulai ?? "").localeCompare(b.jam_mulai ?? "");
+  });
+}
+
 export function formatSesi(sesi: string): string {
   const map: Record<string, string> = {
     PAGI: "Pagi",

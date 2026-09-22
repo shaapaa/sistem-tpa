@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react"
 
-export const AppNavContext = createContext<{ openMenu?: () => void }>({})
+export const AppNavContext = createContext<{ openMenu?: () => void; closeMenu?: () => void }>({})
 
 export function useAppNav() {
   return useContext(AppNavContext)

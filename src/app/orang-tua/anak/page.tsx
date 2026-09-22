@@ -15,6 +15,7 @@ import { User, Calendar, Clock, Phone, MapPin, Users, CalendarDays, Wallet, Grad
 import { formatGender, formatSesi, formatTingkat, formatDate } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/layout/empty-state";
+import { useAppNav } from "@/components/layout/app-nav-context";
 
 interface Santri {
   id: string;
@@ -35,6 +36,7 @@ interface Santri {
 
 export default function AnakPage() {
   const { user } = useAuth();
+  const { closeMenu } = useAppNav();
   const router = useRouter();
   const [santris, setSantris] = useState<Santri[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,8 @@ export default function AnakPage() {
   };
 
   useEffect(() => {
-    void fetchSantris();
+    const frame = window.requestAnimationFrame(() => { void fetchSantris(); });
+    return () => window.cancelAnimationFrame(frame);
   }, [user]);
 
   const openLinkDialog = () => {
@@ -115,7 +118,11 @@ export default function AnakPage() {
       setLinkDialogOpen(false);
       setLinkSuccess("Anak berhasil dihubungkan.");
       await fetchSantris();
-      window.setTimeout(() => router.replace("/orang-tua"), 700);
+      // Dialog dan menu mobile dikendalikan oleh state. Tutup keduanya dulu,
+      // kemudian revalidasi route agar guard membaca relasi anak yang baru.
+      closeMenu?.();
+      router.replace("/orang-tua");
+      router.refresh();
       return;
     }
     if (data === "already_linked") {

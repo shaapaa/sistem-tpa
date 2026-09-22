@@ -6,7 +6,6 @@ import { useAuth } from "@/lib/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
 import { UserX, Loader2, Search, AlertCircle } from "lucide-react";
 import { formatStatus, getStatusBadgeVariant } from "@/lib/format";
@@ -14,6 +13,12 @@ import { PageHeader } from "@/components/layout/page-header";
 import { todayJakarta } from "@/lib/islamic-date";
 
 interface Santri { id: string; nama: string; kelompok_id: string | null }
+type JadwalHariIni = { jam_mulai: string; jam_selesai: string; sesi?: { nama: string } | null; jadwal_sesi_pengajar?: { pengajar?: { nama: string } | null }[] | null }
+
+function hariIniJakarta() {
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", weekday: "long" }).format(new Date())
+  return ({ Monday: "SENIN", Tuesday: "SELASA", Wednesday: "RABU", Thursday: "KAMIS", Friday: "JUMAT", Saturday: "SABTU", Sunday: "MINGGU" } as Record<string, string>)[weekday]
+}
 
 const DAILY_STATUSES = [
   { label: "Hadir", value: "HADIR" },
@@ -32,17 +37,20 @@ export default function PresensiPage() {
   const [dailyLoading, setDailyLoading] = useState(false);
   const [savingStatus, setSavingStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [jadwalHariIni, setJadwalHariIni] = useState<JadwalHariIni[]>([])
   const supabase = createClient();
 
   useEffect(() => {
     const loadDaily = async () => {
-      if (!user || !dailyDate) { setDailyRows([]); return; }
+      if (!user) { setDailyRows([]); return; }
       setDailyLoading(true);
       const { data: pengajar } = await supabase.from("pengajar").select("id").eq("profile_id", user.id).single();
       if (!pengajar) { setDailyLoading(false); return; }
 
-      // RLS memperluas penugasan pengajar ke seluruh kelompok pada sesi yang sama.
-      const { data: kelompokData } = await supabase.from("kelompok").select("id");
+      const { data: jadwalData } = await supabase.from("jadwal_sesi").select("sesi_id, jam_mulai, jam_selesai, sesi(nama), jadwal_sesi_pengajar(pengajar(nama))").eq("hari", hariIniJakarta()).eq("is_active", true);
+      setJadwalHariIni((jadwalData ?? []) as unknown as JadwalHariIni[])
+      const sesiIds = (jadwalData ?? []).map((jadwal) => jadwal.sesi_id);
+      const { data: kelompokData } = sesiIds.length > 0 ? await supabase.from("kelompok").select("id").in("sesi_id", sesiIds) : { data: [] };
       const kelompokIds = (kelompokData ?? []).map((k) => k.id);
       if (kelompokIds.length === 0) { setDailyLoading(false); setDailyRows([]); return; }
 
@@ -76,7 +84,19 @@ export default function PresensiPage() {
       setDailyLoading(false);
     };
     loadDaily();
-  }, [user, dailyDate]);
+  }, [user]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("presensi-sesi-hari-ini")
+      .on("postgres_changes", { event: "*", schema: "public", table: "presensi" }, (payload) => {
+        const row = payload.new as { santri_id?: string; tanggal?: string; status?: string }
+        if (row.tanggal !== dailyDate || !row.santri_id || !row.status) return
+        setDailyRows((rows) => rows.map((item) => item.santri.id === row.santri_id ? { ...item, status: row.status ?? item.status } : item))
+      })
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [dailyDate])
 
   const handleSetStatus = async (santri: Santri, status: string) => {
     if (!user) return;
@@ -94,6 +114,9 @@ export default function PresensiPage() {
 
     if (!error) {
       setDailyRows((rows) => rows.map((r) => r.santri.id === santri.id ? { ...r, status } : r));
+    } else {
+      // Data terbaru tetap akan diterima melalui Realtime bila pengajar lain menyimpan lebih dahulu.
+      setDailyRows((rows) => rows.map((r) => r.santri.id === santri.id ? { ...r, status: r.status } : r));
     }
     setSavingStatus(null);
   };
@@ -107,11 +130,11 @@ export default function PresensiPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Kehadiran" title="Presensi harian" description="Semua santri dalam kelompok Anda, lengkap dengan keterangan kehadiran." backHref="/pengajar" />
+      <PageHeader eyebrow="Kehadiran" title="Presensi hari ini" description="Santri Iqra dan Al-Qur'an pada sesi yang dijadwalkan untuk Anda hari ini." backHref="/pengajar" />
 
       <Card className="card-elevated overflow-visible">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-sm font-medium">Presensi Santri</CardTitle>
+          <div><CardTitle className="text-sm font-medium">Presensi Santri</CardTitle><p className="mt-1 text-xs text-muted-foreground">{jadwalHariIni.length === 0 ? "Belum ada sesi mengajar hari ini" : jadwalHariIni.map((jadwal) => { const pengajars = (jadwal.jadwal_sesi_pengajar ?? []).map((item) => item.pengajar?.nama).filter(Boolean).join(" · "); return `${jadwal.sesi?.nama === "PAGI" ? "Sesi Pagi" : jadwal.sesi?.nama === "SORE" ? "Sesi Sore" : "Sesi"} · ${jadwal.jam_mulai.slice(0, 5)}–${jadwal.jam_selesai.slice(0, 5)}${pengajars ? ` · Pengajar: ${pengajars}` : ""}` }).join(" | ")}</p></div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="relative w-full sm:w-56">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -121,10 +144,6 @@ export default function PresensiPage() {
                 placeholder="Cari nama santri..."
                 className="h-9 pl-9"
               />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">Tanggal</Label>
-              <DatePicker value={dailyDate} onChange={setDailyDate} />
             </div>
           </div>
         </CardHeader>
@@ -136,7 +155,7 @@ export default function PresensiPage() {
           ) : dailyRows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border p-5 text-center sm:p-8">
               <UserX className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
-              <p className="text-sm text-muted-foreground">Tidak ada santri pada kelompok Anda</p>
+              <p className="text-sm text-muted-foreground">Tidak ada santri pada sesi yang dijadwalkan untuk Anda hari ini</p>
             </div>
           ) : (
             <>

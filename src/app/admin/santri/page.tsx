@@ -92,7 +92,10 @@ export default function SantriPage() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchData() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   // Kelompok otomatis: Iqra -> A, Al-Quran -> B, pada sesi terpilih
   const openAdd = () => {

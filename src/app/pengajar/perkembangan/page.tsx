@@ -11,12 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Save, BookOpen, BookMarked, Moon, CheckCircle, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { todayJakarta } from "@/lib/islamic-date";
 
 interface Santri { id: string; nama: string; kelompok_id: string | null; kelompok?: { nama: string } | null }
-interface Kelompok { id: string; nama: string; sesi: { nama: string } | null }
+interface Kelompok { id: string; nama: string; sesi: { id: string; nama: string } | null }
 interface Surat { id: string; nomor: number; nama: string; jumlah_ayat: number; juz: number }
 interface Doa { id: string; nama: string }
 interface Komponen { id: string; nama: string }
@@ -39,7 +40,13 @@ const KURANG_STATUS = [
 ];
 
 function saveErrorMessage(error: { message?: string } | null, fallback: string) {
+  if (/sudah dinilai|duplicate|23505/i.test(error?.message ?? "")) return "Data perkembangan ini sudah dinilai oleh pengajar lain."
   return error?.message ? `${fallback}: ${error.message}` : fallback
+}
+
+function hariIniJakarta() {
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", weekday: "long" }).format(new Date())
+  return ({ Monday: "SENIN", Tuesday: "SELASA", Wednesday: "RABU", Thursday: "KAMIS", Friday: "JUMAT", Saturday: "SABTU", Sunday: "MINGGU" } as Record<string, string>)[weekday]
 }
 
 export default function PerkembanganPage() {
@@ -113,6 +120,7 @@ export default function PerkembanganPage() {
   const [savedNiat, setSavedNiat] = useState(false);
   const [gerakanError, setGerakanError] = useState("");
   const [niatError, setNiatError] = useState("");
+  const [penilaianHariIni, setPenilaianHariIni] = useState({ bacaan: false, hafalanSurat: false, doaIds: [] as string[], gerakan: false, niatIds: [] as string[], pencatatBacaan: "" })
 
   useEffect(() => {
     const fetchMasters = async () => {
@@ -184,8 +192,11 @@ export default function PerkembanganPage() {
         setLoadingKelompoks(false)
         return
       }
-      // RLS hanya mengembalikan kelompok dalam sesi yang menjadi cakupan pengajar.
-      const { data: k, error } = await supabase.from("kelompok").select("id, nama, sesi(nama)").order("nama")
+      const { data: jadwalHariIni, error: jadwalError } = await supabase.from("jadwal_sesi").select("sesi_id").eq("hari", hariIniJakarta()).eq("is_active", true)
+      const sesiIds = (jadwalHariIni ?? []).map((jadwal) => jadwal.sesi_id)
+      const { data: k, error } = sesiIds.length > 0
+        ? await supabase.from("kelompok").select("id, nama, sesi(id, nama)").in("sesi_id", sesiIds).order("nama")
+        : { data: [], error: jadwalError }
       if (error) {
         setKelompoks([])
         setKelompokError("Daftar kelompok tidak dapat dimuat. Coba muat ulang halaman.")
@@ -217,6 +228,35 @@ export default function PerkembanganPage() {
     }
     fetchSantris()
   }, [selectedSesi, kelompoks])
+
+  useEffect(() => {
+    if (!selectedSantri) {
+      return
+    }
+    let active = true
+    const refresh = async () => {
+      const today = todayJakarta()
+      const [bacaan, cicilan, doa, gerakan, niat] = await Promise.all([
+        supabase.from("perkembangan_bacaan").select("id, pengajar(nama)").eq("santri_id", selectedSantri).eq("tanggal", today).limit(1),
+        supabase.from("hafalan_surat_cicilan").select("id, hafalan_santri!inner(santri_id)").eq("hafalan_santri.santri_id", selectedSantri).eq("tanggal", today).limit(1),
+        supabase.from("perkembangan_hafalan_doa").select("doa_id").eq("santri_id", selectedSantri).eq("tanggal", today),
+        supabase.from("perkembangan_gerakan_salat").select("id").eq("santri_id", selectedSantri).eq("tanggal", today).limit(1),
+        supabase.from("perkembangan_niat_salat").select("jenis_salat_id").eq("santri_id", selectedSantri).eq("tanggal", today),
+      ])
+      if (!active) return
+      const bacaanPencatat = (bacaan.data?.[0] as unknown as { pengajar?: { nama?: string } | null } | undefined)?.pengajar?.nama ?? ""
+      setPenilaianHariIni({ bacaan: (bacaan.data?.length ?? 0) > 0, hafalanSurat: (cicilan.data?.length ?? 0) > 0, doaIds: (doa.data ?? []).map((item) => item.doa_id), gerakan: (gerakan.data?.length ?? 0) > 0, niatIds: (niat.data ?? []).map((item) => item.jenis_salat_id), pencatatBacaan: bacaanPencatat })
+    }
+    void refresh()
+    const channel = supabase.channel(`perkembangan-${selectedSantri}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "perkembangan_bacaan", filter: `santri_id=eq.${selectedSantri}` }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "hafalan_surat_cicilan" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "perkembangan_hafalan_doa", filter: `santri_id=eq.${selectedSantri}` }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "perkembangan_gerakan_salat", filter: `santri_id=eq.${selectedSantri}` }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "perkembangan_niat_salat", filter: `santri_id=eq.${selectedSantri}` }, refresh)
+      .subscribe()
+    return () => { active = false; void supabase.removeChannel(channel) }
+  }, [selectedSantri])
 
   // Tampilan progres hanya untuk UX. RPC tetap menghitung ulang ayat mulai saat simpan.
   const loadAyatMulai = async () => {
@@ -267,7 +307,8 @@ export default function PerkembanganPage() {
   }
 
   useEffect(() => {
-    loadAyatMulai()
+    const timer = window.setTimeout(() => { void loadAyatMulai() }, 0)
+    return () => window.clearTimeout(timer)
   }, [selectedSantri, suratId])
 
   useEffect(() => {
@@ -625,7 +666,7 @@ export default function PerkembanganPage() {
           ) : kelompokError ? (
             <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{kelompokError}</p>
           ) : kelompoks.length === 0 ? (
-            <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Belum ada kelompok yang ditugaskan kepada Anda. Hubungi Admin TPA.</p>
+            <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Belum ada jadwal sesi yang ditugaskan kepada Anda hari ini. Hubungi Admin TPA.</p>
           ) : (
             <Select value={selectedSesi} onValueChange={handleSesiChange} items={sesiOptions.map((sesi) => ({ label: `${sesi.charAt(0)}${sesi.slice(1).toLowerCase()}`, value: sesi }))}>
               <SelectTrigger className="h-9"><SelectValue placeholder="Pilih sesi" /></SelectTrigger>
@@ -683,12 +724,14 @@ export default function PerkembanganPage() {
               <div>
                 <p className="text-xs text-muted-foreground">Input perkembangan untuk</p>
                 <p className="font-medium text-foreground">{santris.find((s) => s.id === selectedSantri)?.nama ?? "Santri"}</p>
+                <p className="text-xs text-muted-foreground">Kelompok {selectedKelompokData?.nama ?? "-"} · {jenisBacaan === "IQRA" ? "Iqra" : jenisBacaan === "QURAN" ? "Al-Qur'an" : "Kategori belum ditentukan"}</p>
               </div>
             </div>
             <Button variant="outline" onClick={() => { setSelectedSantri(""); setSearch(""); resetBacaanForm(); resetHafalanForms(); resetPraktikSalatForm() }} className="h-9">
               <ArrowLeft className="mr-2 h-4 w-4" /> Ganti santri
             </Button>
           </div>
+          {penilaianHariIni.bacaan && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-sm text-muted-foreground"><Badge variant="secondary">Bacaan sudah dinilai</Badge><span>{penilaianHariIni.pencatatBacaan ? `Dicatat oleh ${penilaianHariIni.pencatatBacaan}` : "Dicatat oleh pengajar sesi"}</span></div>}
           <Tabs defaultValue="bacaan" className="w-full">
           <TabsList className="grid min-h-12 h-auto w-full grid-cols-3">
             <TabsTrigger value="bacaan" className="gap-1 px-1 text-xs sm:text-sm"><BookOpen className="h-4 w-4" /> Bacaan</TabsTrigger>
@@ -702,7 +745,7 @@ export default function PerkembanganPage() {
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/15 bg-primary/[0.04] px-3 py-2.5">
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground">Level bacaan mengikuti penugasan kelompok</p>
+                    <p className="text-xs font-medium text-muted-foreground">Level bacaan mengikuti kategori pembelajaran santri</p>
                     <p className="mt-0.5 text-sm font-semibold text-foreground">
                       {jenisBacaan === "IQRA" ? "Iqra" : "Al-Qur'an"}
                       <span className="ml-2 text-xs font-medium text-primary">Kelompok {selectedKelompokData?.nama}</span>
@@ -779,8 +822,8 @@ export default function PerkembanganPage() {
                   <Textarea value={catatanBacaan} onChange={(e) => setCatatanBacaan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
                 {errorMsg && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{errorMsg}</p>}
-                <Button onClick={handleSaveBacaan} disabled={saving || (jenisBacaan === "QURAN" && (loadingSurats || Boolean(suratError) || bacaanSurats.length === 0))} className="h-9 px-4">
-                  {saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
+                <Button onClick={handleSaveBacaan} disabled={saving || penilaianHariIni.bacaan || (jenisBacaan === "QURAN" && (loadingSurats || Boolean(suratError) || bacaanSurats.length === 0))} className="h-9 px-4">
+                  {penilaianHariIni.bacaan ? "Sudah dinilai" : saving ? "Menyimpan..." : saved ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>}
                 </Button>
               </CardContent>
             </Card>
@@ -904,8 +947,8 @@ export default function PerkembanganPage() {
                   <Label>Catatan (Opsional)</Label>
                   <Textarea value={jenisHafalan === "DOA" ? catatanHafalanDoa : catatanHafalan} onChange={(e) => jenisHafalan === "DOA" ? setCatatanHafalanDoa(e.target.value) : setCatatanHafalan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
                 </div>
-                <Button onClick={handleSaveHafalan} disabled={(jenisHafalan === "SURAT" && (savingSurah || loadingSurats || Boolean(suratError) || surats.length === 0 || loadingHafalanProgress || hafalanProgress?.selesai)) || (jenisHafalan === "DOA" && (savingDoa || loadingDoas || Boolean(doaError) || doas.length === 0))} className="h-9 px-4">
-                  {jenisHafalan === "SURAT" ? (savingSurah ? "Menyimpan..." : savedSurah ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>) : (savingDoa ? "Menyimpan..." : savedDoa ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>)}
+                <Button onClick={handleSaveHafalan} disabled={(jenisHafalan === "SURAT" && (penilaianHariIni.hafalanSurat || savingSurah || loadingSurats || Boolean(suratError) || surats.length === 0 || loadingHafalanProgress || hafalanProgress?.selesai)) || (jenisHafalan === "DOA" && (penilaianHariIni.doaIds.includes(doaId) || savingDoa || loadingDoas || Boolean(doaError) || doas.length === 0))} className="h-9 px-4">
+                  {jenisHafalan === "SURAT" ? (penilaianHariIni.hafalanSurat ? "Sudah dinilai" : savingSurah ? "Menyimpan..." : savedSurah ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>) : (penilaianHariIni.doaIds.includes(doaId) ? "Sudah dinilai" : savingDoa ? "Menyimpan..." : savedDoa ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>)}
                 </Button>
               </CardContent>
             </Card>
@@ -961,8 +1004,8 @@ export default function PerkembanganPage() {
                         <Label>Catatan (Opsional)</Label>
                         <Textarea value={catatanGerakan} onChange={(e) => setCatatanGerakan(e.target.value)} placeholder="Tambahkan catatan penilaian gerakan..." className="min-h-[80px]" />
                       </div>
-                      <Button onClick={handleSaveGerakanSalat} disabled={savingGerakan} className="h-9 px-4">
-                        {savingGerakan ? "Menyimpan..." : savedGerakan ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan Penilaian Gerakan</>}
+                      <Button onClick={handleSaveGerakanSalat} disabled={savingGerakan || penilaianHariIni.gerakan} className="h-9 px-4">
+                        {penilaianHariIni.gerakan ? "Sudah dinilai" : savingGerakan ? "Menyimpan..." : savedGerakan ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan Penilaian Gerakan</>}
                       </Button>
                     </>}
                     {gerakanError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{gerakanError}</p>}
@@ -998,8 +1041,8 @@ export default function PerkembanganPage() {
                       <Textarea value={catatanNiatSalat} onChange={(e) => setCatatanNiatSalat(e.target.value)} placeholder="Tambahkan catatan penilaian niat..." className="min-h-[80px]" />
                     </div>
                     {niatError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{niatError}</p>}
-                    <Button onClick={handleSaveNiatSalat} disabled={savingNiat} className="h-9 px-4">
-                      {savingNiat ? "Menyimpan..." : savedNiat ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan Niat Salat</>}
+                    <Button onClick={handleSaveNiatSalat} disabled={savingNiat || penilaianHariIni.niatIds.includes(jenisNiatSalatId)} className="h-9 px-4">
+                      {penilaianHariIni.niatIds.includes(jenisNiatSalatId) ? "Sudah dinilai" : savingNiat ? "Menyimpan..." : savedNiat ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan Niat Salat</>}
                     </Button>
                   </CardContent>
                 </Card>

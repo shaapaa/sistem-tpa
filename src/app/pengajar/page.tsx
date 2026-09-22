@@ -3,19 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
-import { Calendar, ArrowRight, AlertTriangle, ClipboardList, CalendarCheck, CalendarX, Activity, Users, TrendingUp, UserX, BookMarked } from "lucide-react";
+import { Calendar, Clock, ArrowRight, AlertTriangle, ClipboardList, CalendarCheck, Users, TrendingUp, UserX, ClipboardCheck, ListChecks, FileText } from "lucide-react";
 import Link from "next/link";
-import { formatHari, formatTime } from "@/lib/format";
+import { formatHari, formatTime, urutkanJadwalMenurutHari } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
-import { StatCard } from "@/components/layout/stat-card";
-import { IslamicBanner } from "@/components/layout/islamic-banner";
 import { SectionHeader } from "@/components/layout/section-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-
-const COLORS = ["#376b59", "#b58b4b", "#b85b4b", "#768078"];
 const PERIODS = [
   { label: "Hari ini", value: "today" },
   { label: "Minggu ini", value: "week" },
@@ -23,7 +18,7 @@ const PERIODS = [
   { label: "Custom", value: "custom" },
 ];
 
-interface Jadwal { id: string; hari: string; jam_mulai: string; jam_selesai: string }
+interface Jadwal { id: string; hari: string; jam_mulai: string; jam_selesai: string; sesi?: { nama: string } | null }
 type PresensiRow = { status: string; santri_id: string; tanggal: string | null }
 type GerakanKomponenRow = {
   status: string
@@ -55,9 +50,9 @@ export default function PengajarDashboard() {
       if (pengajarError || !pengajar) { setLoadError("Profil Pengajar tidak dapat dimuat."); setLoading(false); return; }
 
       const { data: kelompokData, error: kelompokError } = await supabase.from("kelompok").select("id");
-      if (kelompokError) { setLoadError("Penugasan kelompok tidak dapat dimuat."); setLoading(false); return; }
+      if (kelompokError) { setLoadError("Penugasan sesi tidak dapat dimuat."); setLoading(false); return; }
       const kelompokIds = (kelompokData ?? []).map((k) => k.id);
-      if (kelompokIds.length === 0) { setLoadError("Belum ada kelompok yang ditugaskan kepada Anda. Hubungi Admin TPA."); setLoading(false); return; }
+      if (kelompokIds.length === 0) { setLoadError("Belum ada jadwal sesi yang ditugaskan kepada Anda. Hubungi Admin TPA."); setLoading(false); return; }
 
       const { data: santriRes, error: santriError } = await supabase.from("santri").select("id, nama").in("kelompok_id", kelompokIds).eq("is_active", true).order("nama");
       if (santriError) { setLoadError("Daftar Santri tidak dapat dimuat."); setLoading(false); return; }
@@ -65,10 +60,13 @@ export default function PengajarDashboard() {
       const santris = (santriRes ?? []) as unknown as SantriRow[]
       const santriIds = santris.map((s) => s.id)
       setSantriCount(santris.length)
-      if (santriIds.length === 0) { setLoadError("Belum ada Santri aktif pada kelompok Anda."); setLoading(false); return }
+      if (santriIds.length === 0) { setLoadError("Belum ada Santri aktif pada sesi yang ditugaskan kepada Anda."); setLoading(false); return }
 
       const [jadwalRes, presensiRes, bacaanRes, cicilanRes, doaRes, legacySalatRes, gerakanRes, gerakanKomponenRes, niatRes] = await Promise.all([
-        supabase.from("jadwal_sesi").select("id, hari, jam_mulai, jam_selesai").order("hari"),
+        // Jangan hanya mengandalkan RLS di sini. Penugasan pengajar sekarang
+        // berada di jadwal_sesi_pengajar, sehingga dashboard harus selalu
+        // menyaring slot yang memang ditugaskan admin kepada pengajar ini.
+        supabase.from("jadwal_sesi").select("id, hari, jam_mulai, jam_selesai, sesi(nama), jadwal_sesi_pengajar!inner(pengajar_id)").eq("jadwal_sesi_pengajar.pengajar_id", pengajar.id).order("hari"),
         supabase.from("presensi").select("status, santri_id, tanggal").in("kelompok_id", kelompokIds),
         supabase.from("perkembangan_bacaan").select("santri_id, status, tanggal").in("santri_id", santriIds),
         supabase.from("hafalan_surat_cicilan").select("tanggal, status, hafalan_santri(santri_id)").in("hafalan_santri.santri_id", santriIds),
@@ -79,7 +77,7 @@ export default function PengajarDashboard() {
         supabase.from("perkembangan_niat_salat").select("santri_id, status, tanggal").in("santri_id", santriIds),
       ]);
 
-      setJadwals((jadwalRes.data ?? []) as unknown as Jadwal[]);
+      setJadwals(urutkanJadwalMenurutHari((jadwalRes.data ?? []) as unknown as Jadwal[]));
       setPresensi((presensiRes.data ?? []) as unknown as PresensiRow[])
 
       // Month perkembangan count
@@ -159,12 +157,8 @@ export default function PengajarDashboard() {
 
   const totalAtt = attendance.hadir + attendance.izin + attendance.sakit + attendance.alpha
   const attRate = totalAtt ? Math.round((attendance.hadir / totalAtt) * 100) : 0
-  const attData = [
-    { name: "Hadir", value: attendance.hadir },
-    { name: "Izin", value: attendance.izin },
-    { name: "Sakit", value: attendance.sakit },
-    { name: "Alpha", value: attendance.alpha },
-  ].filter((d) => d.value > 0)
+  const hariIni = hariKerjaJakarta()
+  const tugasHariIni = jadwals.filter((jadwal) => jadwal.hari === hariIni)
 
   if (loading) return <div className="h-40 rounded-xl bg-muted animate-pulse" />
   if (loadError) return (
@@ -176,64 +170,48 @@ export default function PengajarDashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Ruang pengajar" title="Dashboard monitoring" description="Pantau santri dan kehadiran untuk evaluasi ke orang tua." />
-      <IslamicBanner text="Sampaikanlah dariku walau satu ayat." source="HR. Bukhari" />
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Santri" value={santriCount} detail="dalam kelompok Anda" icon={Users} className="bg-gradient-to-br from-emerald-500 to-teal-700" href="/pengajar/perkembangan" />
-        <StatCard label="Jadwal aktif" value={jadwals.length} detail="slot mengajar mingguan" icon={Calendar} className="bg-gradient-to-br from-indigo-500 to-violet-700" href="/pengajar/jadwal" />
-        <StatCard label="Perkembangan" value={monthPerk} detail="pada periode terpilih" icon={TrendingUp} className="bg-gradient-to-br from-violet-500 to-purple-700" href="/pengajar/rekap-perkembangan" />
-        <StatCard label="Kehadiran" value={`${attRate}%`} detail="tingkat periode" icon={CalendarCheck} className="bg-gradient-to-br from-amber-400 to-orange-600" href="/pengajar/presensi" />
-      </div>
+      <PageHeader eyebrow="Ruang pengajar" title="Dashboard Pengajar" description={`Ringkasan tugas dan perkembangan santri pada ${new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.`} />
 
-      <div className="surface-panel p-4 sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="space-y-1">
             <Label className="text-[10px] text-muted-foreground">Periode</Label>
             <Select value={period} onValueChange={(v) => v && setPeriod(v)} items={PERIODS}>
               <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PERIODS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-              </SelectContent>
+              <SelectContent>{PERIODS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          {period === "custom" && (
-            <>
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">Dari</Label>
-                <DatePicker value={customFrom} onChange={setCustomFrom} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">Sampai</Label>
-                <DatePicker value={customTo} onChange={setCustomTo} />
-              </div>
-            </>
-          )}
+          {period === "custom" && <><div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Dari</Label><DatePicker value={customFrom} onChange={setCustomFrom} /></div><div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Sampai</Label><DatePicker value={customTo} onChange={setCustomTo} /></div></>}
+          <div className="xl:ml-auto">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Akses cepat</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {[{ href: "/pengajar/presensi", label: "Presensi", icon: ClipboardCheck }, { href: "/pengajar/perkembangan", label: "Perkembangan", icon: TrendingUp }, { href: "/pengajar/jadwal", label: "Jadwal", icon: Calendar }, { href: "/pengajar/rekap-perkembangan", label: "Rekap", icon: ListChecks }, { href: "/pengajar/laporan", label: "Laporan", icon: FileText }].map((item) => <Link key={item.href} href={item.href} className="flex min-h-9 items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-all hover:border-primary/35 hover:shadow-sm"><span className="rounded-md bg-primary/10 p-1 text-primary"><item.icon className="h-3.5 w-3.5 shrink-0" /></span>{item.label}</Link>)}
+            </div>
+          </div>
         </div>
       </div>
 
+      <section className="overflow-hidden rounded-xl border border-border border-l-4 border-l-primary bg-card p-5 shadow-sm sm:p-6">
+        <SectionHeader title="Tugas hari ini" description={tugasHariIni.length ? "Sesi yang menjadi jadwal mengajar Anda hari ini." : "Tidak ada sesi mengajar yang dijadwalkan hari ini."} />
+        {tugasHariIni.length ? <div className="mt-4 space-y-3">{tugasHariIni.map((j) => <div key={j.id} className="flex flex-col gap-4 border-b border-border/70 pb-4 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium text-foreground">{j.sesi?.nama === "PAGI" ? "Sesi Pagi" : j.sesi?.nama === "SORE" ? "Sesi Sore" : "Sesi mengajar"}</p><p className="mt-1 text-sm text-muted-foreground"><span className="font-tabular">{formatTime(j.jam_mulai)}–{formatTime(j.jam_selesai)}</span> · Kelompok A (Iqra) & Kelompok B (Al-Qur&apos;an)</p></div><div className="flex flex-wrap gap-2"><Link href="/pengajar/presensi" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">Mulai Presensi</Link><Link href="/pengajar/perkembangan" className="rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground">Input Perkembangan</Link></div></div>)}</div> : <div className="mt-4 flex flex-wrap gap-2"><Link href="/pengajar/jadwal" className="rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground">Lihat Jadwal</Link></div>}
+      </section>
+
       <section>
-        <SectionHeader title="Ringkasan kehadiran" description={`Periode: ${periodLabel(period)}`} />
-        <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-5">
-          <StatCard label="Hadir" value={attendance.hadir} icon={CalendarCheck} className="bg-gradient-to-br from-emerald-500 to-teal-700" />
-          <StatCard label="Izin" value={attendance.izin} icon={CalendarX} className="bg-gradient-to-br from-amber-400 to-orange-600" />
-          <StatCard label="Sakit" value={attendance.sakit} icon={Activity} className="bg-gradient-to-br from-orange-400 to-red-500" />
-          <StatCard label="Alpha" value={attendance.alpha} icon={UserX} className="bg-gradient-to-br from-rose-500 to-red-600" />
-          <StatCard label="Persentase" value={`${attRate}%`} icon={BookMarked} className="bg-gradient-to-br from-sky-500 to-blue-700" />
+        <SectionHeader title="Ringkasan kerja" description={`Periode: ${periodLabel(period)}`} />
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Link href="/pengajar/perkembangan" className="rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/35 hover:shadow-md"><span className="inline-flex rounded-lg bg-primary/10 p-2 text-primary"><Users className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{santriCount}</p><p className="text-sm font-medium">Santri</p><p className="mt-1 text-xs text-muted-foreground">dalam cakupan Anda</p></Link>
+          <Link href="/pengajar/rekap-perkembangan" className="rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/35 hover:shadow-md"><span className="inline-flex rounded-lg bg-primary/10 p-2 text-primary"><TrendingUp className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{monthPerk}</p><p className="text-sm font-medium">Perkembangan</p><p className="mt-1 text-xs text-muted-foreground">catatan bulan ini</p></Link>
+          <Link href="/pengajar/presensi" className="rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/35 hover:shadow-md"><span className="inline-flex rounded-lg bg-primary/10 p-2 text-primary"><CalendarCheck className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{attRate}%</p><p className="text-sm font-medium">Kehadiran</p><p className="mt-1 text-xs text-muted-foreground">{attendance.hadir} hadir dari {totalAtt}</p></Link>
+          <Link href="/pengajar/jadwal" className="rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/35 hover:shadow-md"><span className="inline-flex rounded-lg bg-primary/10 p-2 text-primary"><Calendar className="h-4 w-4" /></span><p className="mt-3 text-2xl font-semibold text-foreground">{jadwals.length}</p><p className="text-sm font-medium">Jadwal</p><p className="mt-1 text-xs text-muted-foreground">slot mengajar mingguan</p></Link>
         </div>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="surface-panel min-w-0 overflow-hidden p-5 sm:p-6">
-          <SectionHeader title="Distribusi kehadiran" description="Periode terpilih" />
-          {totalAtt ? (
-            <div className="h-[220px] w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                <PieChart><Pie data={attData} cx="50%" cy="50%" innerRadius="42%" outerRadius="62%" paddingAngle={3} dataKey="value" stroke="none" label={({ name, value }) => `${name} ${value}`} labelLine={false} style={{ fontSize: 10, fontWeight: 600, fill: "#26352e" }}>{attData.map((e, i) => <Cell key={e.name} style={{ fill: COLORS[i] }} />)}</Pie><Tooltip /></PieChart>
-              </ResponsiveContainer>
-            </div>
-          ) : <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">Belum ada data kehadiran pada periode ini</div>}
+        <section className="surface-panel border-l-4 border-l-primary p-5 shadow-sm sm:p-6">
+          <SectionHeader title="Kehadiran" description={`Ringkasan ${periodLabel(period).toLowerCase()}.`} actions={<Link href="/pengajar/presensi" className="action-link inline-flex items-center gap-1">Buka presensi <ArrowRight className="h-3.5 w-3.5" /></Link>} />
+          {totalAtt ? <><div className="mt-4 flex items-end justify-between"><div><p className="text-2xl font-semibold text-foreground">{attRate}%</p><p className="text-xs text-muted-foreground">tingkat kehadiran</p></div><p className="text-sm text-muted-foreground">{attendance.hadir} dari {totalAtt} presensi</p></div><div className="mt-4 flex h-2 overflow-hidden rounded-full bg-muted"><div className="bg-emerald-500" style={{ width: `${(attendance.hadir / totalAtt) * 100}%` }} /><div className="bg-amber-400" style={{ width: `${(attendance.izin / totalAtt) * 100}%` }} /><div className="bg-orange-400" style={{ width: `${(attendance.sakit / totalAtt) * 100}%` }} /><div className="bg-rose-500" style={{ width: `${(attendance.alpha / totalAtt) * 100}%` }} /></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"><div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800"><span className="block text-emerald-700/70">Hadir</span><strong>{attendance.hadir}</strong></div><div className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800"><span className="block text-amber-700/70">Izin</span><strong>{attendance.izin}</strong></div><div className="rounded-lg bg-orange-50 px-3 py-2 text-orange-800"><span className="block text-orange-700/70">Sakit</span><strong>{attendance.sakit}</strong></div><div className="rounded-lg bg-rose-50 px-3 py-2 text-rose-800"><span className="block text-rose-700/70">Alpha</span><strong>{attendance.alpha}</strong></div></div></> : <div className="mt-4 rounded-lg bg-muted/50 px-4 py-5 text-sm text-muted-foreground">Belum ada data kehadiran pada periode ini.</div>}
         </section>
-        <section className="surface-panel min-w-0 p-5 sm:p-6">
+        <section className="surface-panel min-w-0 border-l-4 border-l-amber-400 p-5 shadow-sm sm:p-6">
           <SectionHeader title="Anak yang butuh perhatian" description="Penilaian kurang atau kehadiran yang perlu ditindaklanjuti." actions={<Link href="/pengajar/perkembangan" className="action-link inline-flex items-center gap-1">Input perkembangan <ArrowRight className="h-3.5 w-3.5" /></Link>} />
           {attention.length === 0 ? (
             <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><ClipboardList className="h-4 w-4" /> Semua santri dalam kondisi baik</div>
@@ -257,22 +235,27 @@ export default function PengajarDashboard() {
       </div>
 
       <section>
-        <SectionHeader title="Jadwal mengajar" description="Hari dan jam mengajar Anda." actions={<Link href="/pengajar/presensi" className="action-link inline-flex items-center gap-1">Input presensi <ArrowRight className="h-3.5 w-3.5" /></Link>} />
+        <SectionHeader title="Jadwal mengajar" description="Hari dan jam mengajar Anda." actions={<Link href="/pengajar/jadwal" className="action-link inline-flex items-center gap-1">Lihat semua <ArrowRight className="h-3.5 w-3.5" /></Link>} />
         {jadwals.length === 0 ? (
-          <div className="surface-inset mt-4 p-5 text-center sm:p-8"><Calendar className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" /><p className="text-sm text-muted-foreground">Belum ada jadwal</p></div>
+          <div className="surface-inset mt-4 p-5 text-center sm:p-8"><Calendar className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" /><p className="text-sm text-muted-foreground">Belum ada jadwal sesi yang ditugaskan kepada Anda.</p></div>
         ) : (
-          <div className="mt-4 divide-y divide-border/60 border-y border-border/70">
+          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
             {jadwals.map((j) => (
-              <div key={j.id} className="flex items-center justify-between px-3 py-3 sm:px-4">
-                <div>
-                  <div className="text-sm font-medium text-foreground">{j.jam_mulai.slice(0, 5) === "08:00" ? "Sesi Pagi" : "Sesi Sore"}</div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">{formatHari(j.hari)} · <span className="font-tabular">{formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}</span></div>
+              <div key={j.id} className="rounded-xl border border-border bg-card p-3 shadow-sm transition-all hover:border-primary/35 hover:shadow-md sm:p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Calendar className="h-4 w-4" /></div>
+                  <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">{formatHari(j.hari)}</span>
+                </div>
+                <div className="mt-4">
+                  <div className="text-sm font-medium text-foreground">{j.sesi?.nama === "PAGI" ? "Sesi Pagi" : j.sesi?.nama === "SORE" ? "Sesi Sore" : "Sesi"}</div>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" /><span className="font-tabular">{formatTime(j.jam_mulai)} - {formatTime(j.jam_selesai)}</span></div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </section>
+
     </div>
   );
 }
@@ -286,4 +269,9 @@ function currentMonthStart(): string {
 }
 function periodLabel(period: string): string {
   return PERIODS.find((x) => x.value === period)?.label ?? period
+}
+
+function hariKerjaJakarta(): string {
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", weekday: "long" }).format(new Date())
+  return ({ Monday: "SENIN", Tuesday: "SELASA", Wednesday: "RABU", Thursday: "KAMIS", Friday: "JUMAT", Saturday: "SABTU", Sunday: "MINGGU" } as Record<string, string>)[weekday]
 }

@@ -14,7 +14,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
-    setMenuOpen(false)
+    const frame = window.requestAnimationFrame(() => setMenuOpen(false))
+    return () => window.cancelAnimationFrame(frame)
   }, [pathname])
 
   if (isPublic) {
@@ -22,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AppNavContext.Provider value={{ openMenu: () => setMenuOpen(true) }}>
+    <AppNavContext.Provider value={{ openMenu: () => setMenuOpen(true), closeMenu: () => setMenuOpen(false) }}>
       <div className="min-h-screen bg-background">
         <Sidebar />
         <MobileSidebar open={menuOpen} onClose={() => setMenuOpen(false)} />

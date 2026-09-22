@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Activity, BookOpen, CalendarCheck, CalendarDays, GraduationCap, HeartPulse, UserCog, UserX, Users } from "lucide-react"
 
 type PresensiRow = { status: string }
-type JadwalRow = { id: string; sesi?: { id: string; nama: string; pengajar?: { nama: string } | null } | null }
+type JadwalRow = { id: string; sesi?: { id: string; nama: string } | null; jadwal_sesi_pengajar?: { pengajar?: { nama: string } | null }[] | null }
 
 const PERIODS = [
   { label: "Hari Ini", value: "TODAY" },
@@ -60,7 +60,7 @@ export default function AdminDashboard() {
   const [santriPerSesi, setSantriPerSesi] = useState<Record<string, number>>({})
   const [presensi, setPresensi] = useState<PresensiRow[]>([])
   const [jadwal, setJadwal] = useState<JadwalRow[]>([])
-  const today = useMemo(jakartaToday, [])
+  const today = useMemo(() => jakartaToday(), [])
   const [period, setPeriod] = useState("TODAY")
   const [customFrom, setCustomFrom] = useState(today)
   const [customTo, setCustomTo] = useState(today)
@@ -94,9 +94,9 @@ export default function AdminDashboard() {
         setSnapshotLoading(false)
         return
       }
-      const komposisi = (komposisiRes.data ?? []) as unknown as { keterangan: string | null; kelompok?: { sesi_id: string }[] | null }[]
+      const komposisi = (komposisiRes.data ?? []) as unknown as { keterangan: string | null; kelompok?: { sesi_id: string } | null }[]
       const perSesi: Record<string, number> = {}
-      komposisi.forEach((santri) => { const sesiId = santri.kelompok?.[0]?.sesi_id; if (sesiId) perSesi[sesiId] = (perSesi[sesiId] ?? 0) + 1 })
+      komposisi.forEach((santri) => { const sesiId = santri.kelompok?.sesi_id; if (sesiId) perSesi[sesiId] = (perSesi[sesiId] ?? 0) + 1 })
       setSantriAktif(santriRes.count ?? 0)
       setPengajarAktif(pengajarRes.count ?? 0)
       setKelompokAktif(kelompokRes.count ?? 0)
@@ -118,7 +118,7 @@ export default function AdminDashboard() {
       setPeriodError(null)
       const [presensiRes, jadwalRes] = await Promise.all([
         supabase.from("presensi").select("status").gte("tanggal", range.start).lte("tanggal", range.end),
-        supabase.from("jadwal_sesi").select("id, sesi(id, nama, pengajar(nama))").eq("hari", dayName(jadwalDate)).eq("is_active", true),
+        supabase.from("jadwal_sesi").select("id, sesi(id, nama), jadwal_sesi_pengajar(pengajar(nama))").eq("hari", dayName(jadwalDate)).eq("is_active", true),
       ])
       if (cancelled) return
       const queryError = [presensiRes, jadwalRes].find((result) => result.error)?.error
@@ -135,7 +135,9 @@ export default function AdminDashboard() {
   }, [jadwalDate, jadwalDateValid, range.end, range.start, rangeValid])
 
   useEffect(() => {
-    if (rangeValid && (jadwalDate < range.start || jadwalDate > range.end)) setJadwalDate(range.start)
+    if (!rangeValid || (jadwalDate >= range.start && jadwalDate <= range.end)) return
+    const frame = window.requestAnimationFrame(() => setJadwalDate(range.start))
+    return () => window.cancelAnimationFrame(frame)
   }, [jadwalDate, range.start, range.end, rangeValid])
 
   const presensiSummary = useMemo(() => ({
@@ -170,4 +172,4 @@ export default function AdminDashboard() {
 
 function CompositionItem({ label, value, pct, tone }: { label: string; value: number; pct: number; tone: "emerald" | "indigo" }) { return <div className={`rounded-xl border p-4 ${tone === "emerald" ? "border-emerald-200/70 bg-emerald-50/60" : "border-indigo-200/70 bg-indigo-50/60"}`}><p className={`text-xs font-medium uppercase tracking-wider ${tone === "emerald" ? "text-emerald-700" : "text-indigo-700"}`}>{label}</p><p className="mt-2 text-2xl font-semibold text-foreground">{value}</p><p className="mt-1 text-xs text-muted-foreground">{pct}% dari Santri aktif</p></div> }
 function StatusItem({ label, value, icon: Icon, tone }: { label: string; value: number; icon: typeof Activity; tone: string }) { return <div className={`rounded-xl p-3 ${tone}`}><Icon className="h-4 w-4" /><p className="mt-3 text-2xl font-semibold">{value}</p><p className="mt-1 text-xs font-medium">{label}</p></div> }
-function ScheduleItem({ item, santriCount }: { item: JadwalRow; santriCount: number }) { const sesi = item.sesi?.nama ?? ""; return <article className="rounded-xl border border-border/70 bg-muted/[0.18] p-4 transition-colors hover:bg-muted/40"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{sesi === "PAGI" ? "Sesi Pagi" : sesi === "SORE" ? "Sesi Sore" : "Sesi"}</p><p className="mt-1 text-lg font-semibold text-foreground">Iqra & Al-Qur&apos;an</p></div><Badge variant="outline" className="shrink-0">{SESI_JAM[sesi] ?? "-"}</Badge></div><div className="mt-4 space-y-2 border-t border-border/70 pt-3 text-sm"><div className="flex items-center gap-2 text-muted-foreground"><GraduationCap className="h-4 w-4" /><span>{item.sesi?.pengajar?.nama ?? "Pengajar belum ditugaskan"}</span></div><div className="flex items-center gap-2 text-muted-foreground"><Users className="h-4 w-4" /><span>{santriCount} Santri aktif dalam sesi</span></div></div></article> }
+function ScheduleItem({ item, santriCount }: { item: JadwalRow; santriCount: number }) { const sesi = item.sesi?.nama ?? ""; const pengajars = (item.jadwal_sesi_pengajar ?? []).map((assignment) => assignment.pengajar?.nama).filter((nama): nama is string => Boolean(nama)).join(", "); return <article className="rounded-xl border border-border/70 bg-muted/[0.18] p-4 transition-colors hover:bg-muted/40"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{sesi === "PAGI" ? "Sesi Pagi" : sesi === "SORE" ? "Sesi Sore" : "Sesi"}</p><p className="mt-1 text-lg font-semibold text-foreground">Iqra & Al-Qur&apos;an</p></div><Badge variant="outline" className="shrink-0">{SESI_JAM[sesi] ?? "-"}</Badge></div><div className="mt-4 space-y-2 border-t border-border/70 pt-3 text-sm"><div className="flex items-center gap-2 text-muted-foreground"><GraduationCap className="h-4 w-4" /><span>{pengajars || "Pengajar belum ditugaskan"}</span></div><div className="flex items-center gap-2 text-muted-foreground"><Users className="h-4 w-4" /><span>{santriCount} Santri aktif dalam sesi</span></div></div></article> }
