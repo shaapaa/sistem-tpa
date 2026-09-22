@@ -368,6 +368,7 @@ export default function PerkembanganPage() {
   const selectedKelompokData = kelompoks.find((kelompok) => kelompok.id === santris.find((santri) => santri.id === selectedSantri)?.kelompok_id)
   const selectedQuranSurat = bacaanSurats.find((surat) => surat.id === quranSuratId)
   const komponenBelumLancar = komponens.filter((komponen) => !komponenLancarIds.includes(komponen.id))
+  const suratHafalanSelesai = jenisHafalan === "SURAT" && hafalanProgress?.selesai === true
   const jenisBacaan = selectedKelompokData?.nama === "A"
     ? "IQRA"
     : selectedKelompokData?.nama === "B"
@@ -883,16 +884,18 @@ export default function PerkembanganPage() {
                         )}
                       </div>
                     )}
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Mulai dari ayat</Label>
-                        <Input value={ayatMulai} className="h-9" disabled placeholder="Otomatis" />
+                    {!hafalanProgress?.selesai && (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Mulai dari ayat</Label>
+                          <Input value={ayatMulai} className="h-9" disabled placeholder="Otomatis" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Sudah hafal sampai ayat</Label>
+                          <Input type="number" value={ayatSelesai} onChange={(e) => setAyatSelesai(e.target.value)} className="h-9" placeholder="Ayat terakhir" disabled={loadingHafalanProgress} min={ayatMulai || 1} />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Sudah hafal sampai ayat</Label>
-                        <Input type="number" value={ayatSelesai} onChange={(e) => setAyatSelesai(e.target.value)} className="h-9" placeholder="Ayat terakhir" disabled={loadingHafalanProgress || hafalanProgress?.selesai} min={ayatMulai || 1} />
-                      </div>
-                    </div>
+                    )}
                   </>
                 ) : (
                   <>
@@ -934,22 +937,27 @@ export default function PerkembanganPage() {
                 {jenisHafalan === "SURAT" && surahError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{surahError}</p>}
                 {jenisHafalan === "DOA" && hafalanDoaError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{hafalanDoaError}</p>}
 
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={jenisHafalan === "DOA" ? statusHafalanDoa : statusHafalan} onValueChange={(v) => v && (jenisHafalan === "DOA" ? setStatusHafalanDoa(v) : setStatusHafalan(v))} items={BAC_SURAT_STATUS}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {BAC_SURAT_STATUS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Catatan (Opsional)</Label>
-                  <Textarea value={jenisHafalan === "DOA" ? catatanHafalanDoa : catatanHafalan} onChange={(e) => jenisHafalan === "DOA" ? setCatatanHafalanDoa(e.target.value) : setCatatanHafalan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
-                </div>
-                <Button onClick={handleSaveHafalan} disabled={(jenisHafalan === "SURAT" && (penilaianHariIni.hafalanSurat || savingSurah || loadingSurats || Boolean(suratError) || surats.length === 0 || loadingHafalanProgress || hafalanProgress?.selesai)) || (jenisHafalan === "DOA" && (penilaianHariIni.doaIds.includes(doaId) || savingDoa || loadingDoas || Boolean(doaError) || doas.length === 0))} className="h-9 px-4">
-                  {jenisHafalan === "SURAT" ? (penilaianHariIni.hafalanSurat ? "Sudah dinilai" : savingSurah ? "Menyimpan..." : savedSurah ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>) : (penilaianHariIni.doaIds.includes(doaId) ? "Sudah dinilai" : savingDoa ? "Menyimpan..." : savedDoa ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>)}
-                </Button>
+                {!suratHafalanSelesai && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select value={jenisHafalan === "DOA" ? statusHafalanDoa : statusHafalan} onValueChange={(v) => v && (jenisHafalan === "DOA" ? setStatusHafalanDoa(v) : setStatusHafalan(v))} items={BAC_SURAT_STATUS}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {BAC_SURAT_STATUS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Catatan (Opsional)</Label>
+                      <Textarea value={jenisHafalan === "DOA" ? catatanHafalanDoa : catatanHafalan} onChange={(e) => jenisHafalan === "DOA" ? setCatatanHafalanDoa(e.target.value) : setCatatanHafalan(e.target.value)} placeholder="Tambahkan catatan..." className="min-h-[80px]" />
+                    </div>
+
+                    <Button onClick={handleSaveHafalan} disabled={(jenisHafalan === "SURAT" && (penilaianHariIni.hafalanSurat || savingSurah || loadingSurats || Boolean(suratError) || surats.length === 0 || loadingHafalanProgress || hafalanProgress?.selesai)) || (jenisHafalan === "DOA" && (penilaianHariIni.doaIds.includes(doaId) || savingDoa || loadingDoas || Boolean(doaError) || doas.length === 0))} className="h-9 px-4">
+                      {jenisHafalan === "SURAT" ? (penilaianHariIni.hafalanSurat ? "Sudah dinilai" : savingSurah ? "Menyimpan..." : savedSurah ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>) : (penilaianHariIni.doaIds.includes(doaId) ? "Sudah dinilai" : savingDoa ? "Menyimpan..." : savedDoa ? <><CheckCircle className="mr-2 h-4 w-4" /> Tersimpan</> : <><Save className="mr-2 h-4 w-4" /> Simpan</>)}
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
